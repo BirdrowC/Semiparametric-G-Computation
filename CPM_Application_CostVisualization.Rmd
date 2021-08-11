@@ -1,0 +1,210 @@
+---
+title: "Cost Visualization"
+author: "Caroline Birdrow"
+date: "7/18/2021"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r}
+dat_cost <- read.csv("AllCostAug11.csv")
+```
+
+```{r}
+means <- as.vector(colMeans(exp(dat_cost)))
+
+a <- sum(means[2:4])
+b <- sum(means[5:7])
+c <- sum(means[8:10])
+d <- sum(means[11:13])
+e <- sum(means[14:16])
+f <- sum(means[17:19])
+g <- sum(means[20:22])
+h <- sum(means[23:25])
+
+cost_values <- c(means[2:4], a, means[5:7], b, means[8:10], c, means[11:13], d, means[14:16], e, means[17:19], f, means[20:22], g, means[23:25], h)
+
+cost_vals <- rbind(cost_values[1:4], cost_values[5:8], cost_values[9:12], cost_values[13:16], cost_values[17:20], cost_values[21:24], cost_values[25:28], cost_values[29:32])
+
+cost_vals <- as.data.frame(cost_vals)
+
+names(cost_vals) <- c("Cost, t = 1", "Cost, t = 2", "Cost, t = 3", "Overall Cost")
+rownames(cost_vals) <- c("Treat 1, Stage 1A", "Treat 2, Stage 1A", "Treat 3, Stage 1A", "Treat 4, Stage 1A", "Treat 1, Stage 1B", "Treat 2, Stage 1B", "Treat 3, Stage 1B", "Treat 4, Stage 1B")
+cost_vals
+```
+
+```{r}
+library(ggplot2)
+```
+
+```{r}
+Treat1 <- c(dat_cost$Cost1.Treat1, dat_cost$Cost2.Treat1, dat_cost$Cost3.Treat1, dat_cost$Cost1.Treat5, dat_cost$Cost2.Treat5, dat_cost$Cost3.Treat5)
+
+Treat2 <- c(dat_cost$Cost1.Treat2, dat_cost$Cost2.Treat2, dat_cost$Cost3.Treat2, dat_cost$Cost1.Treat6, dat_cost$Cost2.Treat6, dat_cost$Cost3.Treat6)
+
+Treat3 <- c(dat_cost$Cost1.Treat3, dat_cost$Cost2.Treat3, dat_cost$Cost3.Treat3, dat_cost$Cost1.Treat7, dat_cost$Cost2.Treat7, dat_cost$Cost3.Treat7)
+
+Treat4 <- c(dat_cost$Cost1.Treat4, dat_cost$Cost2.Treat4, dat_cost$Cost3.Treat4, dat_cost$Cost1.Treat8, dat_cost$Cost2.Treat8, dat_cost$Cost3.Treat8)
+
+Values <- c(Treat1, Treat2, Treat3, Treat4)
+
+Stage <- c(rep(1, 15000), rep(2, 15000), rep(1, 15000), rep(2, 15000), rep(1, 15000), rep(2, 15000), rep(1, 15000), rep(2, 15000))
+
+Month <- c(rep(1, 5000), rep(2, 5000), rep(3, 5000), rep(1, 5000), rep(2, 5000), rep(3, 5000), rep(1, 5000), rep(2, 5000), rep(3, 5000), rep(1, 5000), rep(2, 5000), rep(3, 5000), rep(1, 5000), rep(2, 5000), rep(3, 5000), rep(1, 5000), rep(2, 5000), rep(3, 5000), rep(1, 5000), rep(2, 5000), rep(3, 5000), rep(1, 5000), rep(2, 5000), rep(3, 5000))
+
+Treat <- c(rep(1, 30000), rep(2, 30000), rep(3, 30000), rep(4, 30000))
+
+cost_all <- as.data.frame(cbind(Values, Stage, Month, Treat))
+```
+
+```{r}
+cost_all_stage1A <- cost_all[which(cost_all$Stage == 1 & (cost_all$Values > 0 | cost_all$Values < 0)), ]
+
+nrow(cost_all[which(cost_all$Stage == 1 & (cost_all$Values == 0) & (cost_all$Month == 1) & (cost_all$Treat == 1)), ])/nrow(cost_all[which(cost_all$Stage == 1 & (cost_all$Month == 1) & (cost_all$Treat == 1)), ])
+
+nrow(cost_all[which(cost_all$Stage == 1 & (cost_all$Values == 0) & (cost_all$Month == 2) & (cost_all$Treat == 1)), ])/nrow(cost_all[which(cost_all$Stage == 1 & (cost_all$Month == 2) & (cost_all$Treat == 1)), ])
+
+nrow(cost_all[which(cost_all$Stage == 1 & (cost_all$Values == 0) & (cost_all$Month == 3) & (cost_all$Treat == 1)), ])/nrow(cost_all[which(cost_all$Stage == 1 & (cost_all$Month == 3) & (cost_all$Treat == 1)), ])
+
+nrow(cost_all[which(cost_all$Stage == 1 & (cost_all$Values == 0) & (cost_all$Month == 1) & (cost_all$Treat == 2)), ])/nrow(cost_all[which(cost_all$Stage == 1 & (cost_all$Month == 1) & (cost_all$Treat == 2)), ])
+
+nrow(cost_all[which(cost_all$Stage == 1 & (cost_all$Values == 0) & (cost_all$Month == 2) & (cost_all$Treat == 2)), ])/nrow(cost_all[which(cost_all$Stage == 1 & (cost_all$Month == 2) & (cost_all$Treat == 2)), ])
+
+nrow(cost_all[which(cost_all$Stage == 1 & (cost_all$Values == 0) & (cost_all$Month == 3) & (cost_all$Treat == 2)), ])/nrow(cost_all[which(cost_all$Stage == 1 & (cost_all$Month == 3) & (cost_all$Treat == 2)), ])
+
+nrow(cost_all[which(cost_all$Stage == 1 & (cost_all$Values == 0) & (cost_all$Month == 1) & (cost_all$Treat == 3)), ])/nrow(cost_all[which(cost_all$Stage == 1 & (cost_all$Month == 1) & (cost_all$Treat == 3)), ])
+
+nrow(cost_all[which(cost_all$Stage == 1 & (cost_all$Values == 0) & (cost_all$Month == 2) & (cost_all$Treat == 3)), ])/nrow(cost_all[which(cost_all$Stage == 1 & (cost_all$Month == 2) & (cost_all$Treat == 3)), ])
+
+nrow(cost_all[which(cost_all$Stage == 1 & (cost_all$Values == 0) & (cost_all$Month == 3) & (cost_all$Treat == 3)), ])/nrow(cost_all[which(cost_all$Stage == 1 & (cost_all$Month == 3) & (cost_all$Treat == 3)), ])
+
+nrow(cost_all[which(cost_all$Stage == 1 & (cost_all$Values == 0) & (cost_all$Month == 1) & (cost_all$Treat == 4)), ])/nrow(cost_all[which(cost_all$Stage == 1 & (cost_all$Month == 1) & (cost_all$Treat == 4)), ])
+
+nrow(cost_all[which(cost_all$Stage == 1 & (cost_all$Values == 0) & (cost_all$Month == 2) & (cost_all$Treat == 4)), ])/nrow(cost_all[which(cost_all$Stage == 1 & (cost_all$Month == 2) & (cost_all$Treat == 4)), ])
+
+nrow(cost_all[which(cost_all$Stage == 1 & (cost_all$Values == 0) & (cost_all$Month == 3) & (cost_all$Treat == 4)), ])/nrow(cost_all[which(cost_all$Stage == 1 & (cost_all$Month == 3) & (cost_all$Treat == 4)), ])
+
+dat_text <- data.frame(
+  label = c("P(Y = 0) = 0.334", "P(Y = 0) = 0.094", "P(Y = 0) = 0.0228", "P(Y = 0) = 0.346", "P(Y = 0) = 0.100", "P(Y = 0) = 0.290", "P(Y = 0) = 0.334", "P(Y = 0) = 0.415", "P(Y = 0) = 0.0148", "P(Y = 0) = 0", "P(Y = 0) = 0.0068", "P(Y = 0) = 8e-4"),
+  Month = c(1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3),
+  Treat = c(1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4),
+  x     = c(-8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8),
+  y     = c(2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000)
+)
+
+p <- ggplot(cost_all_stage1A, aes(x=Values, factor = factor(Treat))) + geom_histogram(binwidth = 1, colour = "blue", fill = "blue") + scale_x_continuous(labels = c("0.00001", "0.001", "1", "200"), breaks = c(-11.51292546, -6.907755279, 0, 5.298317367)) + labs(title = "Log Cost, Y, by Month and Treatment Regime for Stage 1A", x = "Log Cost (USD/1000)") 
+p + facet_grid(vars(Treat), vars(Month), labeller = label_both) + geom_text(
+  data    = dat_text,
+  mapping = aes(x = x, y = y, label = label),
+  size = 3
+)
+```
+
+```{r}
+10^-4
+exp(-10)
+```
+
+```{r}
+cost_all_stage1B <- cost_all[which(cost_all$Stage == 2 & (cost_all$Values > 0 | cost_all$Values < 0)), ]
+
+nrow(cost_all[which(cost_all$Stage == 2 & (cost_all$Values == 0) & (cost_all$Month == 1) & (cost_all$Treat == 1)), ])/nrow(cost_all[which(cost_all$Stage == 2 & (cost_all$Month == 1) & (cost_all$Treat == 1)), ])
+
+nrow(cost_all[which(cost_all$Stage == 2 & (cost_all$Values == 0) & (cost_all$Month == 2) & (cost_all$Treat == 1)), ])/nrow(cost_all[which(cost_all$Stage == 2 & (cost_all$Month == 2) & (cost_all$Treat == 1)), ])
+
+nrow(cost_all[which(cost_all$Stage == 2 & (cost_all$Values == 0) & (cost_all$Month == 3) & (cost_all$Treat == 1)), ])/nrow(cost_all[which(cost_all$Stage == 2 & (cost_all$Month == 3) & (cost_all$Treat == 1)), ])
+
+nrow(cost_all[which(cost_all$Stage == 2 & (cost_all$Values == 0) & (cost_all$Month == 1) & (cost_all$Treat == 2)), ])/nrow(cost_all[which(cost_all$Stage == 2 & (cost_all$Month == 1) & (cost_all$Treat == 2)), ])
+
+nrow(cost_all[which(cost_all$Stage == 2 & (cost_all$Values == 0) & (cost_all$Month == 2) & (cost_all$Treat == 2)), ])/nrow(cost_all[which(cost_all$Stage == 2 & (cost_all$Month == 2) & (cost_all$Treat == 2)), ])
+
+nrow(cost_all[which(cost_all$Stage == 2 & (cost_all$Values == 0) & (cost_all$Month == 3) & (cost_all$Treat == 2)), ])/nrow(cost_all[which(cost_all$Stage == 2 & (cost_all$Month == 3) & (cost_all$Treat == 2)), ])
+
+nrow(cost_all[which(cost_all$Stage == 2 & (cost_all$Values == 0) & (cost_all$Month == 1) & (cost_all$Treat == 3)), ])/nrow(cost_all[which(cost_all$Stage == 2 & (cost_all$Month == 1) & (cost_all$Treat == 3)), ])
+
+nrow(cost_all[which(cost_all$Stage == 2 & (cost_all$Values == 0) & (cost_all$Month == 2) & (cost_all$Treat == 3)), ])/nrow(cost_all[which(cost_all$Stage == 2 & (cost_all$Month == 2) & (cost_all$Treat == 3)), ])
+
+nrow(cost_all[which(cost_all$Stage == 2 & (cost_all$Values == 0) & (cost_all$Month == 3) & (cost_all$Treat == 3)), ])/nrow(cost_all[which(cost_all$Stage == 2 & (cost_all$Month == 3) & (cost_all$Treat == 3)), ])
+
+nrow(cost_all[which(cost_all$Stage == 2 & (cost_all$Values == 0) & (cost_all$Month == 1) & (cost_all$Treat == 4)), ])/nrow(cost_all[which(cost_all$Stage == 2 & (cost_all$Month == 1) & (cost_all$Treat == 4)), ])
+
+nrow(cost_all[which(cost_all$Stage == 2 & (cost_all$Values == 0) & (cost_all$Month == 2) & (cost_all$Treat == 4)), ])/nrow(cost_all[which(cost_all$Stage == 2 & (cost_all$Month == 2) & (cost_all$Treat == 4)), ])
+
+nrow(cost_all[which(cost_all$Stage == 2 & (cost_all$Values == 0) & (cost_all$Month == 3) & (cost_all$Treat == 4)), ])/nrow(cost_all[which(cost_all$Stage == 2 & (cost_all$Month == 3) & (cost_all$Treat == 4)), ])
+
+dat_text <- data.frame(
+  label = c("P(Y = 0) = 0.304", "P(Y = 0) = 0.0696", "P(Y = 0) = 0.0206", "P(Y = 0) = 0.303", "P(Y = 0) = 0.0752", "P(Y = 0) = 0.199", "P(Y = 0) = 0.308", "P(Y = 0) = 0.208", "P(Y = 0) = 0.0048", "P(Y = 0) = 0", "P(Y = 0) = 2e-4", "P(Y = 0) = 0.005"),
+  Month = c(1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3),
+  Treat = c(1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4),
+  x     = c(-7, -7, -7, -7, -7, -7, -7, -7, -7, -7, -7, -7),
+  y     = c(2250, 2250, 2250, 2250, 2250, 2250, 2250, 2250, 2250, 2250, 2250, 2250)
+)
+
+p2 <- ggplot(cost_all_stage1B, aes(x=Values, factor = factor(Treat))) + geom_histogram(binwidth = 1, colour = "blue", fill = "blue") + scale_x_continuous(labels = c("0.00001", "0.001", "1", "200"), breaks = c(-11.51292546, -6.907755279, 0, 5.298317367)) + labs(title = "Log Cost, Y, by Month and Treatment Regime for Stage 1B", x = "Log Cost (USD/1000)") 
+p2 + facet_grid(vars(Treat), vars(Month), labeller = label_both) + geom_text(
+  data    = dat_text,
+  mapping = aes(x = x, y = y, label = label),
+  size = 3
+)
+```
+
+```{r}
+library(grid)
+
+tot_cost1 <- dat_cost$Cost1.Treat1 + dat_cost$Cost2.Treat1 + dat_cost$Cost3.Treat1
+tot_cost2 <- dat_cost$Cost1.Treat2 + dat_cost$Cost2.Treat2 + dat_cost$Cost3.Treat2
+tot_cost3 <- dat_cost$Cost1.Treat3 + dat_cost$Cost2.Treat3 + dat_cost$Cost3.Treat3
+tot_cost4 <- dat_cost$Cost1.Treat4 + dat_cost$Cost2.Treat4 + dat_cost$Cost3.Treat4
+tot_cost5 <- dat_cost$Cost1.Treat5 + dat_cost$Cost2.Treat5 + dat_cost$Cost3.Treat5
+tot_cost6 <- dat_cost$Cost1.Treat6 + dat_cost$Cost2.Treat6 + dat_cost$Cost3.Treat6
+tot_cost7 <- dat_cost$Cost1.Treat7 + dat_cost$Cost2.Treat7 + dat_cost$Cost3.Treat7
+tot_cost8 <- dat_cost$Cost1.Treat8 + dat_cost$Cost2.Treat8 + dat_cost$Cost3.Treat8
+
+Values <- c(tot_cost1, tot_cost2, tot_cost3, tot_cost4, tot_cost5, tot_cost6, tot_cost7, tot_cost8)
+
+Treat <- c(rep(1, 5000), rep(2, 5000), rep(3, 5000), rep(4, 5000), rep(1, 5000), rep(2, 5000), rep(3, 5000), rep(4, 5000))
+
+Stage <- c(rep(1, 20000), rep(2, 20000))
+
+tot_cost_all <- as.data.frame(cbind(Values, Treat, Stage))
+
+tot_cost_all_pos <- tot_cost_all[which(tot_cost_all$Values > 0 | tot_cost_all$Values < 0), ]
+
+nrow(tot_cost_all[which(tot_cost_all$Values == 0 & tot_cost_all$Stage == 1 & tot_cost_all$Treat == 1), ])/nrow(tot_cost_all[which(tot_cost_all$Stage == 1 & tot_cost_all$Treat == 1), ])
+
+nrow(tot_cost_all[which(tot_cost_all$Values == 0 & tot_cost_all$Stage == 2 & tot_cost_all$Treat == 1), ])/nrow(tot_cost_all[which(tot_cost_all$Stage == 2 & tot_cost_all$Treat == 1), ])
+
+nrow(tot_cost_all[which(tot_cost_all$Values == 0 & tot_cost_all$Stage == 1 & tot_cost_all$Treat == 2), ])/nrow(tot_cost_all[which(tot_cost_all$Stage == 1 & tot_cost_all$Treat == 2), ])
+
+nrow(tot_cost_all[which(tot_cost_all$Values == 0 & tot_cost_all$Stage == 2 & tot_cost_all$Treat == 2), ])/nrow(tot_cost_all[which(tot_cost_all$Stage == 2 & tot_cost_all$Treat == 2), ])
+
+nrow(tot_cost_all[which(tot_cost_all$Values == 0 & tot_cost_all$Stage == 1 & tot_cost_all$Treat == 3), ])/nrow(tot_cost_all[which(tot_cost_all$Stage == 1 & tot_cost_all$Treat == 3), ])
+
+nrow(tot_cost_all[which(tot_cost_all$Values == 0 & tot_cost_all$Stage == 2 & tot_cost_all$Treat == 3), ])/nrow(tot_cost_all[which(tot_cost_all$Stage == 2 & tot_cost_all$Treat == 3), ])
+
+nrow(tot_cost_all[which(tot_cost_all$Values == 0 & tot_cost_all$Stage == 1 & tot_cost_all$Treat == 4), ])/nrow(tot_cost_all[which(tot_cost_all$Stage == 1 & tot_cost_all$Treat == 4), ])
+
+nrow(tot_cost_all[which(tot_cost_all$Values == 0 & tot_cost_all$Stage == 2 & tot_cost_all$Treat == 4), ])/nrow(tot_cost_all[which(tot_cost_all$Stage == 2 & tot_cost_all$Treat == 4), ])
+
+dat_text <- data.frame(
+  label = c("P(Y = 0) = 0.0048", "P(Y = 0) = 0.0034", "P(Y = 0) = 0.0718", "P(Y = 0) = 0.0376", "P(Y = 0) = 0.0126", "P(Y = 0) = 0.0012", "P(Y = 0) = 0", "P(Y = 0) = 0"),
+  Stage = c(1, 2, 1, 2, 1, 2, 1, 2),
+  Treat = c(1, 1, 2, 2, 3, 3, 4, 4),
+  x     = c(-13, -13, -13, -13, -13, -13, -13, -13),
+  y     = c(950, 950, 950, 950, 950, 950, 950, 950)
+)
+
+treat.labs <- c("Treat: 1", "Treat: 2", "Treat: 3", "Treat: 4")
+names(treat.labs) <- c("1", "2", "3", "4")
+
+stage.labs <- c("Stage 1A", "Stage 1B")
+names(stage.labs) <- c("1", "2") 
+
+p3 <- ggplot(tot_cost_all_pos, aes(x=Values, factor = factor(Treat))) + geom_histogram(binwidth = 2, colour = "blue", fill = "blue") + scale_x_continuous(labels = c("1e-9","0.00001", "1", "10000", "1e9"), breaks = c(-20.72326584, -11.51292546, 0, 9.210340372, 20.72326584)) + labs(title = "Total Log Cost, Y, by Cancer Stage and Treatment Regime", x = "Log Cost (USD/1000)")
+p3 + facet_grid(vars(Treat), vars(Stage), labeller = labeller(Treat = treat.labs, Stage = stage.labs)) + theme(panel.spacing.x = unit(2, "lines")) + geom_text(
+  data    = dat_text,
+  mapping = aes(x = x, y = y, label = label),
+  size = 3
+)
+```

@@ -1,0 +1,599 @@
+---
+title: "Research Data Analysis"
+output:
+  html_document:
+    code_folding: hide
+    df_print: paged
+    fig_caption: yes
+    theme: readable
+    toc: yes
+    toc_depth: 5
+    toc_float: yes
+author: Caroline Birdrow
+date: June 29, 2021
+---
+```{r}
+#Read in the data 
+dat <- read.csv("SEER.csv")
+```
+
+## Missingness
+```{r, warning = FALSE, message = FALSE}
+library(rms)
+visdat::vis_miss(dat)
+```
+
+## Treatment Trajectories Present in the Sample
+
+```{r}
+a <- dim(subset(dat, dat$Tx1mo == 0 & dat$Tx2mo == 0 & dat$Tx3mo == 0))[1]
+b <- dim(subset(dat, dat$Tx1mo == 0 & dat$Tx2mo == 0 & dat$Tx3mo == 1))[1]
+c <- dim(subset(dat, dat$Tx1mo == 0 & dat$Tx2mo == 0 & dat$Tx3mo == 2))[1]
+d <- dim(subset(dat, dat$Tx1mo == 0 & dat$Tx2mo == 0 & dat$Tx3mo == 3))[1]
+e <- dim(subset(dat, dat$Tx1mo == 0 & dat$Tx2mo == 1 & dat$Tx3mo == 1))[1]
+f <- dim(subset(dat, dat$Tx1mo == 0 & dat$Tx2mo == 1 & dat$Tx3mo == 3))[1]
+g <- dim(subset(dat, dat$Tx1mo == 0 & dat$Tx2mo == 2 & dat$Tx3mo == 2))[1]
+h <- dim(subset(dat, dat$Tx1mo == 0 & dat$Tx2mo == 2 & dat$Tx3mo == 3))[1]
+i <- dim(subset(dat, dat$Tx1mo == 0 & dat$Tx2mo == 3 & dat$Tx3mo == 3))[1]
+j <- dim(subset(dat, dat$Tx1mo == 1 & dat$Tx2mo == 1 & dat$Tx3mo == 1))[1]
+k <- dim(subset(dat, dat$Tx1mo == 1 & dat$Tx2mo == 1 & dat$Tx3mo == 3))[1]
+l <- dim(subset(dat, dat$Tx1mo == 1 & dat$Tx2mo == 3 & dat$Tx3mo == 3))[1]
+m <- dim(subset(dat, dat$Tx1mo == 2 & dat$Tx2mo == 2 & dat$Tx3mo == 2))[1]
+n <- dim(subset(dat, dat$Tx1mo == 2 & dat$Tx2mo == 2 & dat$Tx3mo == 3))[1]
+o <- dim(subset(dat, dat$Tx1mo == 2 & dat$Tx2mo == 3 & dat$Tx3mo == 3))[1]
+p <- dim(subset(dat, dat$Tx1mo == 3 & dat$Tx2mo == 3 & dat$Tx3mo == 3))[1]
+
+df_traj <- as.data.frame(rbind(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p))
+rownames(df_traj) <- c("000", "001", "002", "003", "011", "013", "022", "023", "033", "111", "113", "133", "222", "223", "233", "333")
+colnames(df_traj) <- "Count"
+df_traj
+```
+
+## Treatment Trajectories Present for Patients with Stage 1A Cancer
+
+```{r}
+a <- dim(subset(dat, dat$Stage_0 == 0 & dat$Tx1mo == 0 & dat$Tx2mo == 0 & dat$Tx3mo == 0))[1]
+b <- dim(subset(dat, dat$Stage_0 == 0 & dat$Tx1mo == 0 & dat$Tx2mo == 0 & dat$Tx3mo == 1))[1]
+c <- dim(subset(dat, dat$Stage_0 == 0 & dat$Tx1mo == 0 & dat$Tx2mo == 0 & dat$Tx3mo == 2))[1]
+d <- dim(subset(dat, dat$Stage_0 == 0 & dat$Tx1mo == 0 & dat$Tx2mo == 0 & dat$Tx3mo == 3))[1]
+e <- dim(subset(dat, dat$Stage_0 == 0 & dat$Tx1mo == 0 & dat$Tx2mo == 1 & dat$Tx3mo == 1))[1]
+f <- dim(subset(dat, dat$Stage_0 == 0 & dat$Tx1mo == 0 & dat$Tx2mo == 1 & dat$Tx3mo == 3))[1]
+g <- dim(subset(dat, dat$Stage_0 == 0 & dat$Tx1mo == 0 & dat$Tx2mo == 2 & dat$Tx3mo == 2))[1]
+h <- dim(subset(dat, dat$Stage_0 == 0 & dat$Tx1mo == 0 & dat$Tx2mo == 2 & dat$Tx3mo == 3))[1]
+i <- dim(subset(dat, dat$Stage_0 == 0 & dat$Tx1mo == 0 & dat$Tx2mo == 3 & dat$Tx3mo == 3))[1]
+j <- dim(subset(dat, dat$Stage_0 == 0 & dat$Tx1mo == 1 & dat$Tx2mo == 1 & dat$Tx3mo == 1))[1]
+k <- dim(subset(dat, dat$Stage_0 == 0 & dat$Tx1mo == 1 & dat$Tx2mo == 1 & dat$Tx3mo == 3))[1]
+l <- dim(subset(dat, dat$Stage_0 == 0 & dat$Tx1mo == 1 & dat$Tx2mo == 3 & dat$Tx3mo == 3))[1]
+m <- dim(subset(dat, dat$Stage_0 == 0 & dat$Tx1mo == 2 & dat$Tx2mo == 2 & dat$Tx3mo == 2))[1]
+n <- dim(subset(dat, dat$Stage_0 == 0 & dat$Tx1mo == 2 & dat$Tx2mo == 2 & dat$Tx3mo == 3))[1]
+o <- dim(subset(dat, dat$Stage_0 == 0 & dat$Tx1mo == 2 & dat$Tx2mo == 3 & dat$Tx3mo == 3))[1]
+p <- dim(subset(dat, dat$Stage_0 == 0 & dat$Tx1mo == 3 & dat$Tx2mo == 3 & dat$Tx3mo == 3))[1]
+
+df_traj <- as.data.frame(rbind(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p))
+rownames(df_traj) <- c("000", "001", "002", "003", "011", "013", "022", "023", "033", "111", "113", "133", "222", "223", "233", "333")
+colnames(df_traj) <- "Count"
+df_traj
+```
+
+## Treatment Trajectories Present for Patients with Stage 1B Cancer
+
+```{r}
+a <- dim(subset(dat, dat$Stage_0 == 1 & dat$Tx1mo == 0 & dat$Tx2mo == 0 & dat$Tx3mo == 0))[1]
+b <- dim(subset(dat, dat$Stage_0 == 1 & dat$Tx1mo == 0 & dat$Tx2mo == 0 & dat$Tx3mo == 1))[1]
+c <- dim(subset(dat, dat$Stage_0 == 1 & dat$Tx1mo == 0 & dat$Tx2mo == 0 & dat$Tx3mo == 2))[1]
+d <- dim(subset(dat, dat$Stage_0 == 1 & dat$Tx1mo == 0 & dat$Tx2mo == 0 & dat$Tx3mo == 3))[1]
+e <- dim(subset(dat, dat$Stage_0 == 1 & dat$Tx1mo == 0 & dat$Tx2mo == 1 & dat$Tx3mo == 1))[1]
+f <- dim(subset(dat, dat$Stage_0 == 1 & dat$Tx1mo == 0 & dat$Tx2mo == 1 & dat$Tx3mo == 3))[1]
+g <- dim(subset(dat, dat$Stage_0 == 1 & dat$Tx1mo == 0 & dat$Tx2mo == 2 & dat$Tx3mo == 2))[1]
+h <- dim(subset(dat, dat$Stage_0 == 1 & dat$Tx1mo == 0 & dat$Tx2mo == 2 & dat$Tx3mo == 3))[1]
+i <- dim(subset(dat, dat$Stage_0 == 1 & dat$Tx1mo == 0 & dat$Tx2mo == 3 & dat$Tx3mo == 3))[1]
+j <- dim(subset(dat, dat$Stage_0 == 1 & dat$Tx1mo == 1 & dat$Tx2mo == 1 & dat$Tx3mo == 1))[1]
+k <- dim(subset(dat, dat$Stage_0 == 1 & dat$Tx1mo == 1 & dat$Tx2mo == 1 & dat$Tx3mo == 3))[1]
+l <- dim(subset(dat, dat$Stage_0 == 1 & dat$Tx1mo == 1 & dat$Tx2mo == 3 & dat$Tx3mo == 3))[1]
+m <- dim(subset(dat, dat$Stage_0 == 1 & dat$Tx1mo == 2 & dat$Tx2mo == 2 & dat$Tx3mo == 2))[1]
+n <- dim(subset(dat, dat$Stage_0 == 1 & dat$Tx1mo == 2 & dat$Tx2mo == 2 & dat$Tx3mo == 3))[1]
+o <- dim(subset(dat, dat$Stage_0 == 1 & dat$Tx1mo == 2 & dat$Tx2mo == 3 & dat$Tx3mo == 3))[1]
+p <- dim(subset(dat, dat$Stage_0 == 1 & dat$Tx1mo == 3 & dat$Tx2mo == 3 & dat$Tx3mo == 3))[1]
+
+df_traj <- as.data.frame(rbind(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p))
+rownames(df_traj) <- c("000", "001", "002", "003", "011", "013", "022", "023", "033", "111", "113", "133", "222", "223", "233", "333")
+colnames(df_traj) <- "Count"
+df_traj
+```
+
+## Data Management 
+
+```{r}
+dat$Cost1mo <- dat$Cost1mo/1000
+dat$Cost2mo <- dat$Cost2mo/1000
+dat$Cost3mo <- dat$Cost3mo/1000
+```
+
+## Table 1, Stratified by Cancer Stage
+
+```{r, warning = FALSE, message = FALSE}
+#Load the necessary packages 
+library(boot)
+library(table1)
+
+#Relabel the Charlson comorbidity index variable categories and make into a factor variable
+#Repeat this for each month
+dat$Charlson1mo <- 
+  factor(dat$Charlson1mo, levels=c(0, 1, 2, 3),
+         labels=c("0", 
+                  "1",
+                  "2",
+                  "3+"))
+
+dat$Charlson2mo <- 
+  factor(dat$Charlson2mo, levels=c(0, 1, 2, 3),
+         labels=c("0", 
+                  "1",
+                  "2",
+                  "3+"))
+
+dat$Charlson3mo <- 
+  factor(dat$Charlson3mo, levels=c(0, 1, 2, 3),
+         labels=c("0", 
+                  "1",
+                  "2",
+                  "3+"))
+
+#Relabel the treatment variable categories and make into a factor variable
+#Do this for each month
+dat$Tx1mo <- factor(dat$Tx1mo, levels=c(0, 1, 2),
+         labels=c("None", 
+                  "Radiation Therapy (RT)",
+                  "Chemotherapy (CT)"))
+
+dat$Tx2mo <- factor(dat$Tx2mo, levels=c(0, 1, 2, 3),
+         labels=c("None", 
+                  "RT",
+                  "CT",
+                  "Both RT & CT"))
+
+dat$Tx3mo <- factor(dat$Tx3mo, levels=c(0, 1, 2, 3),
+         labels=c("None", 
+                  "RT",
+                  "CT",
+                  "Both RT & CT"))
+
+#Rename variables for table presentation 
+table1::label(dat$Age_dx_0) <- "Age at Hysterectomy"
+table1::label(dat$Stage_0) <- "Cancer Stage at Hysterectomy"
+table1::label(dat$Charlson1mo) <- "Charlson Comorbidity Index, t = 0"
+table1::label(dat$Charlson2mo) <- "Charlson Comorbidity Index, t = 1"
+table1::label(dat$Charlson3mo) <- "Charlson Comorbidity Index, t = 2"
+table1::label(dat$Tx1mo) <- "Treatment within Month 1"
+table1::label(dat$Tx2mo) <- "Treatment within Month 2"
+table1::label(dat$Tx3mo) <- "Treatment within Month 3"
+table1::label(dat$Cost1mo) <- "Cost within Month 1"
+table1::label(dat$Cost2mo) <- "Cost within Month 2"
+table1::label(dat$Cost3mo) <- "Cost within Month 3"
+table1::label(dat$Hosp1mo) <- "Hospitalizations within Month 1"
+table1::label(dat$Hosp2mo) <- "Hospitalizations within Month 2"
+table1::label(dat$Hosp3mo) <- "Hospitalizations within Month 3"
+
+#Construct table 1
+dat$Stage_0 <- factor(dat$Stage_0, levels = c(0, 1, 2),labels = c("1A", "1B", "P-Value"))
+
+rndr <- function(x, name, ...) {
+    if (length(x) == 0) {
+        y <- dat[[name]]
+        s <- rep("", length(render.default(x=y, name=name, ...)))
+        if (is.numeric(y)) {
+          # modify to use non-parametric kruskal test for continuous variables
+            p <- kruskal.test(y ~ dat$Stage_0)$p.value
+        } else if(any(table(y, dat$Stage_0) <= 5)){
+            p <- fisher.test(table(y, droplevels(dat$Stage_0)), workspace = 2e8)$p.value
+          } 
+          else{
+            p <- chisq.test(table(y, droplevels(dat$Stage_0)))$p.value
+          }
+        s[2] <- sub("<", "&lt;", format.pval(p, digits=3, eps=0.001))
+        s
+    } else {
+        render.default(x=x, name=name, ...)
+    }
+}
+
+rndr.strat <- function(label, n, ...) {
+    ifelse(n==0, label, render.strat.default(label, n, ...))
+}
+
+#Construct table 1
+t1 <- table1::table1(~ Age_dx_0 + Charlson1mo + Charlson2mo + Charlson3mo + Tx1mo + Tx2mo + Tx3mo + Cost1mo + Cost2mo + Cost3mo + Hosp1mo + Hosp2mo + Hosp3mo | Stage_0, data = dat, droplevels = F, render = rndr, render.strat = rndr.strat, overall= "Overall")
+t1
+```
+
+## Table 1, Stratified by Baseline Charlson comorbidity index
+
+```{r}
+#Construct table 1
+t2 <- table1::table1(~ Age_dx_0 + Stage_0 + Charlson2mo + Charlson3mo + Tx1mo + Tx2mo + Tx3mo + Cost1mo + Cost2mo + Cost3mo + Hosp1mo + Hosp2mo + Hosp3mo | Charlson1mo , data = dat, droplevels = F, render = rndr, render.strat = rndr.strat, overall= "Overall")
+t2
+```
+
+```{r}
+## Convert to long
+dat_long <- reshape(dat, direction = "long", varying = list(c(4,8,12),
+                                                            c(5,9,13),
+                                                            c(6,10,14),
+                                                            c(7,11,15)), sep = "", idvar = "ID")
+
+dat_long <- dat_long[order(dat_long$ID),]
+row.names(dat_long) <- NULL
+names(dat_long) <- c("ID", "Age_dx_0", "Stage_0", "time", "Charlson", "Tx", "Cost", "Hosp")
+```
+
+## Distributions of Variables of Interest at Baseline
+
+```{r, warning = FALSE, message = FALSE}
+#Load the necessary packages
+library(gridExtra)
+library(ggplot2)
+
+g_age <- ggplot(dat,aes(x = Age_dx_0)) +
+  geom_histogram(bins = 12, color = 'black', fill = "steelblue") + 
+  theme_minimal() +
+  labs(title="Age at Diagnosis",x="Age (Years)", y = "Count")
+g_age <- g_age + scale_y_continuous(breaks= c(0, 500, 1000, 1500, 2000, 2500, 3000), labels = c("0","500", "1000", "1500", "2000", "2500", "3000")) + scale_x_continuous(breaks= c(60, 65, 70, 75, 80, 85, 90, 95, 100), labels = c("60","65", "70", "75", "80", "85", "90", "95", "100")) + theme(panel.grid.minor = element_blank())
+
+dens <- density(dat$Age_dx_0, kernel = "gaussian")
+plot(dens, main = "Distribution of Baseline Age", xlab = "Age (Years)")
+
+#Distribution of Stage at Hysterectomy 
+df2 <- data.frame(Stage = c("1A", "1B"), Value = c(8618, 2924))
+g_stage <- ggplot(df2, aes(y = Value, x=Stage)) + 
+    geom_bar(position="dodge", stat="identity") +
+  labs(title="Distribution of Stage at Hysterectomy",x="Stage", y = "Count") +
+  geom_bar(stat="identity", fill="steelblue")+
+  theme_minimal()
+
+g_age
+g_stage
+```
+
+## Distributions of the Charlson Comorbidity Index at Each Time Point
+
+```{r, warning = FALSE, message = FALSE}
+#Distribution of Charlson Comorbidity Index, t = 0
+df3 <- data.frame(Index = c("0", "1", "2", "3+"), Value = c(7915, 2644, 791, 192))
+g_index1 <- ggplot(df3, aes(y = Value, x=Index)) + 
+    geom_bar(position="dodge", stat="identity") +
+  labs(title="Distribution of Charlson Comorbidity Index, t = 0",x="Index", y = "Count") +
+  geom_bar(stat="identity", fill="steelblue")+
+  theme_minimal()
+
+#Distribution of Charlson Comorbidity Index, t = 1
+df4 <- data.frame(Index = c("0", "1", "2", "3+"), Value = c(4643, 757, 5942, 200))
+g_index2 <- ggplot(df4, aes(y = Value, x=Index)) + 
+    geom_bar(position="dodge", stat="identity") +
+  labs(title="Distribution of Charlson Comorbidity Index, t = 1",x="Index", y = "Count") +
+  geom_bar(stat="identity", fill="steelblue")+
+  theme_minimal()
+
+#Distribution of Charlson Comorbidity Index, t = 2
+df5 <- data.frame(Index = c("0", "1", "2", "3+"), Value = c(4509, 793, 5184, 1056))
+g_index3 <- ggplot(df5, aes(y = Value, x=Index)) + 
+    geom_bar(position="dodge", stat="identity") +
+  labs(title="Distribution of Charlson Comorbidity Index, t = 2",x="Index", y = "Count") +
+  geom_bar(stat="identity", fill="steelblue")+
+  theme_minimal()
+
+grid.arrange(g_index1, g_index2, g_index3, ncol=1)
+```
+
+## Distribution of the Charlson Comorbidity Index over Time
+
+```{r, warning = FALSE, message = FALSE}
+library(dplyr)
+dat_long$Charlson <- as.integer(dat_long$Charlson)
+
+#Spaghetti Plot for the Charlson Comorbidity Index - No Jitter
+p <- ggplot(data = dat_long, aes(x = time, y = Charlson, group = ID)) +
+  labs(title="Charlson Comorbidity Index",x="Time (Months)", y = "Charlson Comorbidity Index") +
+  theme_minimal()
+p_original <- p + geom_line()
+
+#With Jitter on Time and Charlson
+p <- ggplot(data = dat_long, aes(x = jitter(time), y = jitter(Charlson), group = ID)) +
+  labs(title="Charlson Comorbidity Index",x="Time (Months)", y = "Charlson Comorbidity Index") +
+  theme_minimal()
+p1 <- p + geom_line()
+
+#Spaghetti Plot for the Charlson Comorbidity Index, Taking the Mean Score at Each Time Point
+dat_long_new <- dat_long %>% group_by(time) %>% summarise_at(vars(Charlson), funs(mean))
+
+p <- ggplot(data = dat_long_new, aes(x = time, y = Charlson)) +
+  labs(title="Mean Charlson Comorbidity Index",x="Time (Months)", y = "Charlson Comorbidity Index") +
+  theme_minimal()
+p_new <- p + geom_line()
+
+grid.arrange(p_original, p1, p_new, ncol=2)
+```
+
+## Distributions of the Hospitalization Variable at Each Time Point
+
+```{r, warning = FALSE, message = FALSE}
+#Distribution of Hospitalization, t = 1
+g_hosp1 <- ggplot(dat, aes(x = Hosp1mo)) +
+  geom_histogram(bins = 25, color = 'black', fill = "steelblue") + 
+  theme_minimal() +
+  labs(title="Distribution of Hospitalizations, t = 1",x="Hospitalizations", y = "Count")
+
+#Distribution of Hospitalization, t = 2
+g_hosp2 <- ggplot(dat, aes(x = Hosp2mo)) +
+  geom_histogram(bins = 25, color = 'black', fill = "steelblue") + 
+  theme_minimal() +
+  labs(title="Distribution of Hospitalizations, t = 2",x="Hospitalizations", y = "Count")
+
+#Distribution of Hospitalization, t = 3
+g_hosp3 <- ggplot(dat, aes(x = Hosp3mo)) +
+  geom_histogram(bins = 25, color = 'black', fill = "steelblue") + 
+  theme_minimal() +
+  labs(title="Distribution of Hospitalizations, t = 3",x="Hospitalizations", y = "Count")
+
+grid.arrange(g_hosp1, g_hosp2, g_hosp3, ncol=2)
+```
+
+## Distribution of the Hospitalization Variable over Time
+
+```{r, warning = FALSE, message = FALSE}
+#Spaghetti Plot for Hospitalizations
+p <- ggplot(data = dat_long, aes(x = time, y = Hosp, group = ID)) +
+  labs(title="Hospitalizations",x="Time (Months)", y = "Hospitalizations") +
+  theme_minimal()
+p1 <- p + geom_line()
+
+#Spaghetti Plot for the Hospitalizations, Taking the Mean Score at Each Time Point
+dat_long_new <- dat_long %>% group_by(time) %>% summarise_at(vars(Hosp), funs(mean))
+
+p <- ggplot(data = dat_long_new, aes(x = time, y = Hosp)) +
+  labs(title="Mean # of Hospitalizations",x="Time (Months)", y = "Hospitalizations") +
+  theme_minimal()
+p_new <- p + geom_line()
+
+grid.arrange(p1, p_new, ncol=2)
+```
+
+## Distributions of the Treatment Variable at Each Time Point
+
+```{r, warning = FALSE, message = FALSE}
+#Distribution of Treatment, t = 1
+df6 <- data.frame(Treat = c("None", "RT", "CT", "RT + CT"), Value = c(10950, 539, 53, 0))
+g_tx1 <- ggplot(df6, aes(y = Value, x=Treat)) + 
+    geom_bar(position="dodge", stat="identity") +
+  labs(title="Distribution of Treatment, t = 1",x="Treatment", y = "Count") +
+  geom_bar(stat="identity", fill="steelblue")+
+  theme_minimal()
+
+#Distribution of Treatment, t = 2
+df7 <- data.frame(Treat = c("None", "RT", "CT", "RT + CT"), Value = c(8626, 2520, 280, 116))
+g_tx2 <- ggplot(df7, aes(y = Value, x=Treat)) + 
+    geom_bar(position="dodge", stat="identity") +
+  labs(title="Distribution of Treatment, t = 2",x="Treatment", y = "Count") +
+  geom_bar(stat="identity", fill="steelblue")+
+  theme_minimal()
+
+#Distribution of Treatment, t = 3
+df8 <- data.frame(Treat = c("None", "RT", "CT", "RT + CT"), Value = c(7950, 2887, 437, 268))
+g_tx3 <- ggplot(df8, aes(y = Value, x=Treat)) + 
+    geom_bar(position="dodge", stat="identity") +
+  labs(title="Distribution of Treatment, t = 3",x="Treatment", y = "Count") +
+  geom_bar(stat="identity", fill="steelblue")+
+  theme_minimal()
+
+grid.arrange(g_tx1, g_tx2, g_tx3, ncol=2)
+```
+
+## Distribution of the Treatment Variable over Time
+
+```{r, warning = FALSE, message = FALSE}
+## Re-code treatment
+dat_long$Tx_new <- 0
+dat_long$Tx_new[dat_long$Tx == "None"] <- 0
+dat_long$Tx_new[dat_long$Tx == "RT" | dat_long$Tx == "Radiation Therapy (RT)"] <- 1
+dat_long$Tx_new[dat_long$Tx == "CT" | dat_long$Tx == "Chemotherapy (CT)"] <- 2
+dat_long$Tx_new[dat_long$Tx == "Both RT & CT"] <- 3 
+
+#Spaghetti Plot for Treatment
+p <- ggplot(data = dat_long, aes(x = time, y = Tx_new, group = ID)) +
+  labs(title="Treatment",x="Time (Months)", y = "Treatment") +
+  theme_minimal()
+p1 <- p + geom_line()
+
+#Spaghetti Plot for the Treatment, Taking the Mean Score at Each Time Point
+dat_long_new <- dat_long %>% group_by(time) %>% summarise_at(vars(Tx_new), funs(mean))
+
+p <- ggplot(data = dat_long_new, aes(x = time, y = Tx_new)) +
+  labs(title="Treatment",x="Time (Months)", y = "Treatment") +
+  theme_minimal()
+p_new <- p + geom_line()
+
+grid.arrange(p1, p_new, ncol=2)
+```
+
+```{r}
+month1_treat1 <- paste(round(length(dat_long$Tx_new[which(dat_long$time == 1 & dat_long$Tx_new == 0)])/length(dat_long$Tx_new[which(dat_long$time == 1)])*100, 2), "%", sep = "")
+month2_treat1 <- paste(round(length(dat_long$Tx_new[which(dat_long$time == 2 & dat_long$Tx_new == 0)])/length(dat_long$Tx_new[which(dat_long$time == 2)])*100, 2), "%", sep = "")
+month3_treat1 <- paste(round(length(dat_long$Tx_new[which(dat_long$time == 3 & dat_long$Tx_new == 0)])/length(dat_long$Tx_new[which(dat_long$time == 3)])*100, 2), "%", sep = "")
+
+month1_treat2 <- paste(round(length(dat_long$Tx_new[which(dat_long$time == 1 & dat_long$Tx_new == 1)])/length(dat_long$Tx_new[which(dat_long$time == 1)])*100, 2), "%", sep = "")
+month2_treat2 <- paste(round(length(dat_long$Tx_new[which(dat_long$time == 2 & dat_long$Tx_new == 1)])/length(dat_long$Tx_new[which(dat_long$time == 2)])*100, 2), "%", sep = "")
+month3_treat2 <- paste(round(length(dat_long$Tx_new[which(dat_long$time == 3 & dat_long$Tx_new == 1)])/length(dat_long$Tx_new[which(dat_long$time == 3)])*100, 2), "%", sep = "")
+
+month1_treat3 <- paste(round(length(dat_long$Tx_new[which(dat_long$time == 1 & dat_long$Tx_new == 2)])/length(dat_long$Tx_new[which(dat_long$time == 1)])*100, 2), "%", sep = "")
+month2_treat3 <- paste(round(length(dat_long$Tx_new[which(dat_long$time == 2 & dat_long$Tx_new == 2)])/length(dat_long$Tx_new[which(dat_long$time == 2)])*100, 2), "%", sep = "")
+month3_treat3 <- paste(round(length(dat_long$Tx_new[which(dat_long$time == 3 & dat_long$Tx_new == 2)])/length(dat_long$Tx_new[which(dat_long$time == 3)])*100, 2), "%", sep = "")
+
+month1_treat4 <- paste(round(length(dat_long$Tx_new[which(dat_long$time == 1 & dat_long$Tx_new == 3)])/length(dat_long$Tx_new[which(dat_long$time == 1)])*100, 2), "%", sep = "")
+month2_treat4 <- paste(round(length(dat_long$Tx_new[which(dat_long$time == 2 & dat_long$Tx_new == 3)])/length(dat_long$Tx_new[which(dat_long$time == 2)])*100, 2), "%", sep = "")
+month3_treat4 <- paste(round(length(dat_long$Tx_new[which(dat_long$time == 3 & dat_long$Tx_new == 3)])/length(dat_long$Tx_new[which(dat_long$time == 3)])*100, 2), "%", sep = "")
+
+month1_treat1
+month2_treat1
+month3_treat1
+
+month1_treat2
+month2_treat2
+month3_treat2
+
+month1_treat3
+month2_treat3
+month3_treat3
+
+month1_treat4
+month2_treat4
+month3_treat4
+```
+
+```{r}
+dat_figure <- data.frame(x = rep(1:3, each = 4), y = rep(1:4, 3),
+                  lab = c(month1_treat1, month1_treat2, month1_treat3, month1_treat4, month2_treat1, month2_treat2, month2_treat3, month2_treat4, month3_treat1, month3_treat2, month3_treat3, month3_treat4), colr = rep(c("a", "b", "c", "d"),3))
+
+dat_figure$x <- as.factor(dat_figure$x)
+dat_figure$y <- as.factor(dat_figure$y)
+
+cols <- c("a"= "grey32", "b" = "grey42", "c" = "grey52", "d" = "grey62")
+ggplot(data = dat_figure, aes(x = x, y = y)) +
+  geom_point(data = dat_figure, aes(color = colr), size = 25) +
+  geom_text(mapping = aes(x = x, y = y, label = lab), size = 5, color = "white") +
+  scale_color_manual(values = cols) +
+  scale_fill_manual(values=cols) +
+  theme_light() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(size = 10),
+        legend.position = "none"
+  ) +
+  scale_x_discrete(name = "Time (months)", breaks = 1:3, labels = as.character(1:3)) +
+  scale_y_discrete(name = NULL, breaks = 1:4, labels = c("None", "RT", "CT", "RT + CT"))
+```
+
+## Distributions of the Cost Variable at Each Time Point
+
+```{r, warning = FALSE, message = FALSE}
+#Distribution of Cost, t = 1
+g_cost1 <- ggplot(dat,aes(x = Cost1mo)) +
+  geom_histogram(bins = 25, color = 'black', fill = "steelblue") + 
+  theme_minimal() +
+  labs(title="Cost, t = 1",x="Cost (USD/1000)", y = "Count")
+
+#Distribution of Cost, t = 2
+g_cost2 <- ggplot(dat,aes(x = Cost2mo)) +
+  geom_histogram(bins = 25, color = 'black', fill = "steelblue") + 
+  theme_minimal() +
+  labs(title="Cost, t = 2",x="Cost (USD/1000)", y = "Count")
+
+#Distribution of Cost, t = 3
+g_cost3 <- ggplot(dat,aes(x = Cost3mo)) +
+  geom_histogram(bins = 25, color = 'black', fill = "steelblue") + 
+  theme_minimal() +
+  labs(title="Cost, t = 3",x="Cost (USD/1000)", y = "Count")
+
+grid.arrange(g_cost1, g_cost2, g_cost3, ncol=2)
+```
+
+## Distribution of the Cost Variable over Time
+
+```{r, warning = FALSE, message = FALSE}
+#Spaghetti Plot for Cost
+p <- ggplot(data = dat_long, aes(x = time, y = Cost, group = ID)) +
+  labs(title="Cost",x="Time (Months)", y = "Cost") +
+  theme_minimal()
+p1 <- p + geom_line()
+
+#Spaghetti Plot for the Cost, Taking the Mean Score at Each Time Point
+dat_long_new <- dat_long %>% group_by(time) %>% summarise_at(vars(Cost), funs(mean))
+
+p <- ggplot(data = dat_long_new, aes(x = time, y = Cost)) +
+  labs(title="Cost",x="Time (Months)", y = "Cost") +
+  theme_minimal()
+p_new <- p + geom_line()
+
+grid.arrange(p1, p_new, ncol=2)
+```
+
+## Distributions of the Cost Variable, Stratified by the Charlson Comorbidity Index 
+
+```{r, warning = FALSE, message = FALSE}
+#Make the Charlson Comorbidity index into a factor variable
+dat_long$Charlson_2 <- as.factor(dat_long$Charlson)
+
+#Spaghetti Plot for Cost, Stratified by the Charlson Comorbidity Index
+p <- ggplot(data = dat_long, aes(x = time, y = Cost, group = ID, colour = Charlson_2)) +
+  labs(title="Cost",x="Time (Months)", y = "Cost") +
+  theme_minimal()
+p1 <- p + geom_line()
+
+#Spaghetti Plot for the Cost, Taking the Mean Score at Each Time Point
+dat_long_new <- dat_long %>% group_by(time) %>% summarise_at(vars(Cost, Charlson), funs(mean))
+
+#Spaghetti Plot for the Cost, Taking the Mean Score at Each Time Point & Stratfiied by the Charlson Comorbidity Index 
+p <- ggplot(data = dat_long_new, aes(x = time, y = Cost, colour= Charlson)) +
+  labs(title="Cost",x="Time (Months)", y = "Cost") +
+  theme_minimal()
+p_new <- p + geom_line()
+grid.arrange(p1, p_new, ncol=2)
+```
+
+## Distributions of the Cost Variable, Stratified by the Number of Hospitalizations
+
+```{r, warning = FALSE, message = FALSE}
+#Make the Charlson Comorbidity index into a factor variable
+dat_long$Hosp_2 <- as.factor(dat_long$Hosp)
+
+#Spaghetti Plot for Cost, Stratified by the Charlson Comorbidity Index
+p <- ggplot(data = dat_long, aes(x = time, y = Cost, group = ID, colour = Hosp_2)) +
+  labs(title="Cost",x="Time (Months)", y = "Cost") +
+  theme_minimal()
+p1 <- p + geom_line()
+
+#Spaghetti Plot for the Cost, Taking the Mean Score at Each Time Point
+dat_long_new <- dat_long %>% group_by(time) %>% summarise_at(vars(Cost, Hosp), funs(mean))
+
+#Spaghetti Plot for the Cost, Taking the Mean Score at Each Time Point & Stratfiied by the Charlson Comorbidity Index 
+p <- ggplot(data = dat_long_new, aes(x = time, y = Cost, colour= Hosp)) +
+  labs(title="Cost",x="Time (Months)", y = "Cost") +
+  theme_minimal()
+p_new <- p + geom_line()
+grid.arrange(p1, p_new, ncol=2)
+```
+
+```{r}
+## Create a log cost variable 
+dat_long$log_cost <- 0
+dat_long$log_cost[dat_long$Cost > 0] <- log(dat_long$Cost[dat_long$Cost > 0])
+dat_long$log_cost[dat_long$Cost == 0] <- dat_long$Cost[dat_long$Cost == 0]
+
+## Create a cost indicator 
+dat_long$cost_ind <- 0
+dat_long$cost_ind[dat_long$log_cost == 0] <- 1
+```
+
+#Plot of log-transformed cost 
+```{r}
+#Distribution of Cost, t = 1
+g_cost1 <- ggplot(dat,aes(x = log(Cost1mo))) +
+  geom_histogram(bins = 25, color = 'black', fill = "steelblue") + 
+  theme_minimal() +
+  labs(title="Log Cost, t = 1",x="Log Cost (USD/1000)", y = "Count")
+
+#Distribution of Cost, t = 2
+g_cost2 <- ggplot(dat,aes(x = log(Cost2mo))) +
+  geom_histogram(bins = 25, color = 'black', fill = "steelblue") + 
+  theme_minimal() +
+  labs(title="Log Cost, t = 2",x="Log Cost (USD/1000)", y = "Count")
+
+#Distribution of Cost, t = 3
+g_cost3 <- ggplot(dat,aes(x = log(Cost3mo))) +
+  geom_histogram(bins = 25, color = 'black', fill = "steelblue") + 
+  theme_minimal() +
+  labs(title="Log Cost, t = 3",x="Log Cost (USD/1000)", y = "Count")
+
+grid.arrange(g_cost1, g_cost2, g_cost3, ncol=2)
+```
+

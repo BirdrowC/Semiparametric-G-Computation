@@ -1,0 +1,1663 @@
+---
+title: "Data Analysis - Research - Outcome Estimates"
+author: "Caroline Birdrow"
+date: "7/14/2021"
+output: html_document
+---
+
+```{r}
+set.seed(2021)
+
+begin <- Sys.time()
+
+#Set the working directory 
+setwd("~/Documents/CPM Research/Thesis")
+
+#Read in the data 
+dat <- read.csv("SEER.csv")
+
+#Load the necessary library 
+library(rms)
+
+dat$Cost1mo <- dat$Cost1mo/1000
+dat$Cost2mo <- dat$Cost2mo/1000
+dat$Cost3mo <- dat$Cost3mo/1000
+
+## Convert to long
+dat_long <- reshape(dat, direction = "long", varying = list(c(4,8,12),
+                                                            c(5,9,13),
+                                                            c(6,10,14),
+                                                            c(7,11,15)), sep = "", idvar = "ID")
+
+dat_long <- dat_long[order(dat_long$ID),]
+row.names(dat_long) <- NULL
+names(dat_long) <- c("ID", "Age_dx_0", "Stage_0", "time", "Charlson", "Tx", "Cost", "Hosp")
+
+## CPM Models within G-Computation
+
+## Create a log cost variable 
+dat_long$log_cost <- 0
+dat_long$log_cost[dat_long$Cost > 0] <- log(dat_long$Cost[dat_long$Cost > 0])
+dat_long$log_cost[dat_long$Cost == 0] <- dat_long$Cost[dat_long$Cost == 0]
+
+## Create a cost indicator 
+dat_long$cost_ind <- 0
+dat_long$cost_ind[dat_long$log_cost == 0] <- 1
+
+## Define lag function
+lag1.k <- function(x, k)
+{
+  l <- length(x)
+  n <- l/k
+  lagx <- head(c(0, x), l)
+  lagx[seq(0,n - 1)*k + 1] <- 0
+  return(lagx)
+}
+
+## Define pull one function
+pull.one <- function(x, y, fhat)
+{
+  return(y[max(which(fhat < x))])
+}
+
+## Define the expit function 
+expit <- function(x) {exp(x)/(1 + exp(x))}
+
+## Re-code treatment
+dat_long$TxRT <- 0
+dat_long$TxCT <- 0
+dat_long$TxRT[dat_long$Tx == 1 | dat_long$Tx == 3] <- 1
+dat_long$TxCT[dat_long$Tx == 2 | dat_long$Tx == 3] <- 1 
+
+## Create lag-1 and lag-2 variables
+dat_long$lagCharlson1 <- lag1.k(dat_long$Charlson, k = 3)
+dat_long$lagCharlson2 <- lag1.k(dat_long$lagCharlson1, k = 3)
+
+dat_long$lagTxRT1 <- lag1.k(dat_long$TxRT, k = 3)
+dat_long$lagTxRT2 <- lag1.k(dat_long$lagTxRT1, k = 3)
+
+dat_long$lagTxCT1 <- lag1.k(dat_long$TxCT, k = 3)
+dat_long$lagTxCT2 <- lag1.k(dat_long$lagTxCT1, k = 3)
+
+dat_long$lagHosp1 <- lag1.k(dat_long$Hosp, k = 3)
+dat_long$lagHosp2 <- lag1.k(dat_long$lagHosp1, k = 3)
+
+dat_long$lagCost1 <- lag1.k(dat_long$log_cost, k = 3)
+dat_long$lagCost2 <- lag1.k(dat_long$lagCost1, k = 3)
+
+# Stage 1A
+
+## Stage 1A at baseline
+dat0 <- subset(dat_long, dat_long$time == 1 & dat_long$Stage_0 == 0)
+
+## Hospitalization model
+xx <- orm(Hosp ~ Age_dx_0 + Charlson + TxRT + TxCT, data = dat0, family = "probit")
+alpha.hat1 <- as.numeric(xx$coef[-c((length(xx$coef) - 3):length(xx$coef))])
+sigma1.hat1 <- as.numeric(xx$coef[length(xx$coef) - 3]) 
+sigma2.hat1 <- as.numeric(xx$coef[length(xx$coef) - 2]) 
+sigma3.hat1 <- as.numeric(xx$coef[length(xx$coef) - 1]) 
+sigma4.hat1 <- as.numeric(xx$coef[length(xx$coef)]) 
+
+## Subset basline data to only include observations for which the cost is greater than zero
+dat2 <- subset(dat0, dat0$log_cost > 0)
+
+## Cost Model, Cost = 0 
+reg.y1 <- glm(cost_ind ~ Age_dx_0 + Charlson + TxRT + TxCT + Hosp, family = binomial(link = "logit"), data = dat0, maxit = 100)
+beta1.hat1 <- reg.y1$coefficients[1]
+beta2.hat1 <- reg.y1$coefficients[2]
+beta3.hat1 <- reg.y1$coefficients[3]
+beta4.hat1 <- reg.y1$coefficients[4]
+beta5.hat1 <- reg.y1$coefficients[5]
+beta6.hat1 <- reg.y1$coefficients[6]
+sd.hat1 <- sd(reg.y1$residuals)
+
+## Cost Model, Cost > 0
+reg.y2 <- orm(log_cost ~ Age_dx_0 + Charlson + TxRT + TxCT + Hosp, data = dat2, family = "probit")
+alpha.hat2 <- as.numeric(reg.y2$coef[-c((length(reg.y2$coef) - 4):length(reg.y2$coef))])
+beta1.hat2 <- as.numeric(reg.y2$coef[length(reg.y2$coef) - 4])
+beta2.hat2 <- as.numeric(reg.y2$coef[length(reg.y2$coef) - 3]) 
+beta3.hat2 <- as.numeric(reg.y2$coef[length(reg.y2$coef) - 2]) 
+beta4.hat2 <- as.numeric(reg.y2$coef[length(reg.y2$coef) - 1]) 
+beta5.hat2 <- as.numeric(reg.y2$coef[length(reg.y2$coef)]) 
+
+## Stage 1A at times 2 and 3
+dat02 <- subset(dat_long, dat_long$time > 1 & dat_long$Stage_0 == 0)
+
+## Charlson model (all at once - including appropriate lagged variables)
+zz <- orm(Charlson ~ Age_dx_0 + lagCharlson1 + lagCharlson2 + lagTxRT1 + lagTxRT2 + lagTxCT1 + lagTxCT2 + lagHosp1 + lagHosp2 + lagCost1 + lagCost2, data = dat02, family = "probit")
+alpha.hat3 <- as.numeric(zz$coef[-c((length(zz$coef) - 10):length(zz$coef))])
+delta1.hat1 <- as.numeric(zz$coef[length(zz$coef) - 10])
+delta2.hat1 <- as.numeric(zz$coef[length(zz$coef) - 9])
+delta3.hat1 <- as.numeric(zz$coef[length(zz$coef) - 8])
+delta4.hat1 <- as.numeric(zz$coef[length(zz$coef) - 7])
+delta5.hat1 <- as.numeric(zz$coef[length(zz$coef) - 6])
+delta6.hat1 <- as.numeric(zz$coef[length(zz$coef) - 5])
+delta7.hat1 <- as.numeric(zz$coef[length(zz$coef) - 4])
+delta8.hat1 <- as.numeric(zz$coef[length(zz$coef) - 3]) 
+delta9.hat1 <- as.numeric(zz$coef[length(zz$coef) - 2]) 
+delta10.hat1 <- as.numeric(zz$coef[length(zz$coef) - 1]) 
+delta11.hat1 <- as.numeric(zz$coef[length(zz$coef)]) 
+
+## Hospitalization model - Times 2 and 3 with lagged variables
+xx2 <- orm(Hosp ~ Age_dx_0 + lagCharlson1 + lagCharlson2 + lagTxRT1 + lagTxRT2 + lagTxCT1 + lagTxCT2 + lagHosp1 + lagHosp2 + lagCost1 + lagCost2, data = dat02, family = "probit", maxit = 20)
+alpha.hat4 <- as.numeric(xx2$coef[-c((length(xx2$coef) - 10):length(xx2$coef))])
+sigma1.hat2 <- as.numeric(xx2$coef[length(xx2$coef) - 10]) 
+sigma2.hat2 <- as.numeric(xx2$coef[length(xx2$coef) - 9]) 
+sigma3.hat2 <- as.numeric(xx2$coef[length(xx2$coef) - 8]) 
+sigma4.hat2 <- as.numeric(xx2$coef[length(xx2$coef) - 7]) 
+sigma5.hat2 <- as.numeric(xx2$coef[length(xx2$coef) - 6]) 
+sigma6.hat2 <- as.numeric(xx2$coef[length(xx2$coef) - 5]) 
+sigma7.hat2 <- as.numeric(xx2$coef[length(xx2$coef) - 4]) 
+sigma8.hat2 <- as.numeric(xx2$coef[length(xx2$coef) - 3]) 
+sigma9.hat2 <- as.numeric(xx2$coef[length(xx2$coef) - 2]) 
+sigma10.hat2 <- as.numeric(xx2$coef[length(xx2$coef) - 1]) 
+sigma11.hat2 <- as.numeric(xx2$coef[length(xx2$coef)]) 
+
+## Cost model - Times 2 and 3 with lagged variables
+
+## Subset data to only include observations for which the cost is greater than zero
+dat22 <- subset(dat02, dat02$Cost > 0)
+
+## Cost Model, Cost = 0 
+reg.y3 <- glm(cost_ind ~ Age_dx_0 + lagCharlson1 + lagCharlson2 + lagTxRT1 + lagTxRT2 + lagTxCT1 + lagTxCT2 + lagHosp1 + lagHosp2 + lagCost1 + lagCost2, family = binomial(link = "logit"), data = dat02, maxit = 100)
+beta1.hat3 <- reg.y3$coefficients[1]
+beta2.hat3 <- reg.y3$coefficients[2]
+beta3.hat3 <- reg.y3$coefficients[3]
+beta4.hat3 <- reg.y3$coefficients[4]
+beta5.hat3 <- reg.y3$coefficients[5]
+beta6.hat3 <- reg.y3$coefficients[6]
+beta7.hat3 <- reg.y3$coefficients[7]
+beta8.hat3 <- reg.y3$coefficients[8]
+beta9.hat3 <- reg.y3$coefficients[9]
+beta10.hat3 <- reg.y3$coefficients[10]
+beta11.hat3 <- reg.y3$coefficients[11]
+beta12.hat3 <- reg.y3$coefficients[12]
+sd.hat2 <- sd(reg.y3$residuals)
+
+## Cost Model, Cost > 0
+reg.y4 <- orm(log_cost ~ Age_dx_0 + lagCharlson1 + lagCharlson2 + lagTxRT1 + lagTxRT2 + lagTxCT1 + lagTxCT2 + lagHosp1 + lagHosp2 + lagCost1 + lagCost2, data = dat22, family = "probit") 
+alpha.hat5 <- as.numeric(reg.y4$coef[-c((length(reg.y4$coef) - 10):length(reg.y4$coef))])
+beta1.hat4 <- as.numeric(reg.y4$coef[length(reg.y4$coef) - 10])
+beta2.hat4 <- as.numeric(reg.y4$coef[length(reg.y4$coef) - 9])
+beta3.hat4 <- as.numeric(reg.y4$coef[length(reg.y4$coef) - 8])
+beta4.hat4 <- as.numeric(reg.y4$coef[length(reg.y4$coef) - 7])
+beta5.hat4 <- as.numeric(reg.y4$coef[length(reg.y4$coef) - 6])
+beta6.hat4 <- as.numeric(reg.y4$coef[length(reg.y4$coef) - 5])
+beta7.hat4 <- as.numeric(reg.y4$coef[length(reg.y4$coef) - 4])
+beta8.hat4 <- as.numeric(reg.y4$coef[length(reg.y4$coef) - 3]) 
+beta9.hat4 <- as.numeric(reg.y4$coef[length(reg.y4$coef) - 2]) 
+beta10.hat4 <- as.numeric(reg.y4$coef[length(reg.y4$coef) - 1]) 
+beta11.hat4 <- as.numeric(reg.y4$coef[length(reg.y4$coef)]) 
+
+# Treatment Trajectory 000
+
+## Define Parameters 
+M <- 5000 
+B <- 1 
+N <- nrow(dat_long)
+
+## Set Treatment Values, t = 1
+stxrt1 <- rep(0, M)
+stxct1 <- rep(0, M)
+
+## Set Treatment Values, t = 2
+stxrt2 <- rep(0, M)
+stxct2 <- rep(0, M)
+
+## Set Treatment Values, t = 3
+stxrt3 <- rep(0, M)
+stxct3 <- rep(0, M)
+
+tmp1 <- matrix(0, nrow = length(alpha.hat1), ncol = M)
+tmp2 <- matrix(0, nrow = length(alpha.hat2), ncol = M)
+tmp3 <- matrix(0, nrow = length(alpha.hat3), ncol = M)
+tmp4 <- matrix(0, nrow = length(alpha.hat4), ncol = M)
+tmp5  <- matrix(0, nrow = length(alpha.hat5), ncol = M)
+tmp6  <- matrix(0, nrow = length(alpha.hat3), ncol = M)
+tmp7  <- matrix(0, nrow = length(alpha.hat4), ncol = M)
+tmp8  <- matrix(0, nrow = length(alpha.hat5), ncol = M)
+
+outcome_1 <- matrix(0, nrow = 1, ncol = 3)
+sd_1 <- matrix(0, nrow = 1, ncol = 3)
+
+## Sample Baseline Age and Charlson Values
+sage0 <- sample(dat0$Age_dx_0, size = M, replace = TRUE)
+scharlson0 <- as.integer(sample(dat0$Charlson, M, replace = TRUE))
+
+## Estimate Hospitalizations, t = 1
+for (i in 1:length(alpha.hat1))
+{
+  tmp1[i,] <- as.numeric(1 - pnorm(alpha.hat1[i] + sigma1.hat1*sage0 + sigma2.hat1*scharlson0 + sigma3.hat1*stxrt1 + sigma4.hat1*stxct1, mean = 0, sd = 1))
+}
+tmp1 <- rbind(0, tmp1)
+shosp1 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp1[,i]
+  shosp1[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat0$Hosp)), fhat = F.hat1)
+}
+
+## Estimate Cost, t = 1
+for (i in 1:length(alpha.hat2))
+{
+  tmp2[i,] <- as.numeric(1 - pnorm(alpha.hat2[i] + beta1.hat2*sage0 + beta2.hat2*scharlson0 + beta3.hat2*stxrt1 + beta4.hat2*stxct1 + beta5.hat2*shosp1, mean = 0, sd = 1))
+}
+tmp2 <- rbind(0, tmp2)
+scost1 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp2[,i]
+  scost1[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat2$log_cost)), fhat = F.hat1)
+}
+
+Y1.g <- rbinom(M, 1, p = expit(beta1.hat1 + beta2.hat1*sage0 + beta3.hat1*scharlson0 + beta4.hat1*stxrt1 + beta5.hat1*stxct1 + beta6.hat1*shosp1))
+
+scost1[Y1.g == 1] <- 0
+
+scost1_1 <- exp(scost1)
+
+outcome_1[1, 1] <- mean(scost1_1)
+
+sd_1[1, 1] <- sd(scost1_1)
+
+## Estimate Charlson, t = 1
+for (i in 1:length(alpha.hat3))
+{
+  tmp3[i,] <- as.numeric(1 - pnorm(alpha.hat3[i] + delta1.hat1*sage0 + delta2.hat1*scharlson0 + delta4.hat1*stxrt1 + delta6.hat1*stxct1 + delta8.hat1*shosp1 + delta10.hat1*scost1, mean = 0, sd = 1))
+}
+tmp3 <- rbind(0, tmp3)
+schar1 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp3[,i]
+  schar1[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Charlson)), fhat = F.hat1)
+}
+
+## Estimate Hospitalizations, t = 2
+for (i in 1:length(alpha.hat4))
+{
+  tmp4[i,] <- as.numeric(1 - pnorm(alpha.hat4[i] + sigma1.hat2*sage0 + sigma2.hat2*scharlson0 + sigma3.hat2*schar1 + sigma4.hat2*stxrt1 + sigma5.hat2*stxrt2 + sigma6.hat2*stxct1 + sigma7.hat2*stxct2 + sigma8.hat2*shosp1 + sigma10.hat2*scost1, mean = 0, sd = 1))
+}
+tmp4 <- rbind(0, tmp4)
+shosp2 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp4[,i]
+  shosp2[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Hosp)), fhat = F.hat1)
+}
+
+## Estimate Cost, t = 2
+for (i in 1:length(alpha.hat5))
+{
+  tmp5[i,] <- as.numeric(1 - pnorm(alpha.hat5[i] + beta1.hat4*sage0 + beta2.hat4*scharlson0 + beta3.hat4*schar1 + beta4.hat4*stxrt1 + beta5.hat4*stxrt2 + beta6.hat4*stxct1 + beta7.hat4*stxct2 + beta8.hat4*shosp1 + beta9.hat4*shosp2 + beta10.hat4*scost1, mean = 0, sd = 1))
+}
+tmp5 <- rbind(0, tmp5)
+scost2 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp5[,i]
+  scost2[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat22$log_cost)), fhat = F.hat1)
+}
+
+Y2.g <- rbinom(M, 1, p = expit(beta1.hat3 + beta2.hat3*sage0 + beta3.hat3*scharlson0 + beta4.hat3*schar1 + beta5.hat3*stxrt1 + beta6.hat3*stxrt2 + beta7.hat3*stxct1 + beta8.hat3*stxct2 + beta9.hat3*shosp1 + beta10.hat3*shosp2 + beta11.hat3*scost1))
+
+scost2[Y2.g == 1] <- 0
+
+scost2_1 <- exp(scost2)
+
+outcome_1[1, 2] <- mean(scost2_1)
+
+sd_1[1, 2] <- sd(scost2_1)
+
+## Estimate Charlson, t = 2
+for (i in 1:length(alpha.hat3))
+{
+  tmp6[i,] <- as.numeric(1 - pnorm(alpha.hat3[i] + delta1.hat1*sage0 + delta2.hat1*scharlson0 + delta3.hat1*schar1 + delta4.hat1*stxrt1 + delta5.hat1*stxrt2 + delta6.hat1*stxct1 + delta7.hat1*stxct2 + delta8.hat1*shosp1 + delta9.hat1*shosp2 + delta10.hat1*scost1 + delta11.hat1*scost2, mean = 0, sd = 1))
+}
+tmp6 <- rbind(0, tmp6)
+schar2 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp6[,i]
+  schar2[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Charlson)), fhat = F.hat1)
+}
+
+## Estimate Hospitalizations, t = 3
+for (i in 1:length(alpha.hat4))
+{
+  tmp7[i,] <- as.numeric(1 - pnorm(alpha.hat4[i] + sigma1.hat2*sage0 + sigma2.hat2*schar1 + sigma3.hat2*schar2 + sigma4.hat2*stxrt2 + sigma5.hat2*stxrt3 + sigma6.hat2*stxct2 + sigma7.hat2*stxct3 + sigma8.hat2*shosp1 + sigma9.hat2*shosp2 + sigma10.hat2*scost1 + sigma11.hat2*scost2, mean = 0, sd = 1))
+}
+tmp7 <- rbind(0, tmp7)
+shosp3 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp7[,i]
+  shosp3[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Hosp)), fhat = F.hat1)
+}
+
+## Estimate Cost, t = 3
+for (i in 1:length(alpha.hat5))
+{
+  tmp8[i,] <- as.numeric(1 - pnorm(alpha.hat5[i] + beta1.hat4*sage0 + beta2.hat4*schar1 + beta3.hat4*schar1 + beta4.hat4*stxrt2 + beta5.hat4*stxrt3 + beta6.hat4*stxct2 + beta7.hat4*stxct3 + beta8.hat4*shosp2 + beta9.hat4*shosp3 + beta10.hat4*scost1 + beta11.hat4*scost2, mean = 0, sd = 1))
+}
+tmp8 <- rbind(0, tmp8)
+scost3 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp8[,i]
+  scost3[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat22$log_cost)), fhat = F.hat1)
+}
+
+Y3.g <- rbinom(M, 1, p = expit(beta1.hat3 + beta2.hat3*sage0 + beta3.hat3*schar1 + beta4.hat3*schar2 + beta5.hat3*stxrt2 + beta6.hat3*stxrt3 + beta7.hat3*stxct2 + beta8.hat3*stxct3 + beta9.hat3*shosp2 + beta10.hat3*shosp3 + beta11.hat3*scost1 + beta12.hat3*scost2))
+
+scost3[Y3.g == 1] <- 0
+
+scost3_1 <- exp(scost3)
+
+outcome_1[1, 3] <- mean(scost3_1)
+
+sd_1[1, 3] <- sd(scost3_1)
+
+# Treatment Trajectory 001
+
+## Set Treatment Values, t = 1
+stxrt1 <- rep(0, M)
+stxct1 <- rep(0, M)
+
+## Set Treatment Values, t = 2
+stxrt2 <- rep(0, M)
+stxct2 <- rep(0, M)
+
+## Set Treatment Values, t = 3
+stxrt3 <- rep(1, M)
+stxct3 <- rep(0, M)
+
+tmp1 <- matrix(0, nrow = length(alpha.hat1), ncol = M)
+tmp2 <- matrix(0, nrow = length(alpha.hat2), ncol = M)
+tmp3 <- matrix(0, nrow = length(alpha.hat3), ncol = M)
+tmp4 <- matrix(0, nrow = length(alpha.hat4), ncol = M)
+tmp5  <- matrix(0, nrow = length(alpha.hat5), ncol = M)
+tmp6  <- matrix(0, nrow = length(alpha.hat3), ncol = M)
+tmp7  <- matrix(0, nrow = length(alpha.hat4), ncol = M)
+tmp8  <- matrix(0, nrow = length(alpha.hat5), ncol = M)
+
+outcome_2 <- matrix(0, nrow = 1, ncol = 3)
+sd_2 <- matrix(0, nrow = 1, ncol = 3)
+
+## Sample Baseline Age and Charlson Values
+sage0 <- sample(dat0$Age_dx_0, size = M, replace = TRUE)
+scharlson0 <- as.integer(sample(dat0$Charlson, M, replace = TRUE))
+
+## Estimate Hospitalizations, t = 1
+for (i in 1:length(alpha.hat1))
+{
+  tmp1[i,] <- as.numeric(1 - pnorm(alpha.hat1[i] + sigma1.hat1*sage0 + sigma2.hat1*scharlson0 + sigma3.hat1*stxrt1 + sigma4.hat1*stxct1, mean = 0, sd = 1))
+}
+tmp1 <- rbind(0, tmp1)
+shosp1 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp1[,i]
+  shosp1[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat0$Hosp)), fhat = F.hat1)
+}
+
+## Estimate Cost, t = 1
+for (i in 1:length(alpha.hat2))
+{
+  tmp2[i,] <- as.numeric(1 - pnorm(alpha.hat2[i] + beta1.hat2*sage0 + beta2.hat2*scharlson0 + beta3.hat2*stxrt1 + beta4.hat2*stxct1 + beta5.hat2*shosp1, mean = 0, sd = 1))
+}
+tmp2 <- rbind(0, tmp2)
+scost1 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp2[,i]
+  scost1[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat2$log_cost)), fhat = F.hat1)
+}
+
+Y1.g <- rbinom(M, 1, p = expit(beta1.hat1 + beta2.hat1*sage0 + beta3.hat1*scharlson0 + beta4.hat1*stxrt1 + beta5.hat1*stxct1 + beta6.hat1*shosp1))
+
+scost1[Y1.g == 1] <- 0
+
+scost1_2 <- exp(scost1)
+
+outcome_2[1, 1] <- mean(scost1_2)
+
+sd_2[1, 1] <- sd(scost1_2)
+
+## Estimate Charlson, t = 1
+for (i in 1:length(alpha.hat3))
+{
+  tmp3[i,] <- as.numeric(1 - pnorm(alpha.hat3[i] + delta1.hat1*sage0 + delta2.hat1*scharlson0 + delta4.hat1*stxrt1 + delta6.hat1*stxct1 + delta8.hat1*shosp1 + delta10.hat1*scost1, mean = 0, sd = 1))
+}
+tmp3 <- rbind(0, tmp3)
+schar1 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp3[,i]
+  schar1[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Charlson)), fhat = F.hat1)
+}
+
+## Estimate Hospitalizations, t = 2
+for (i in 1:length(alpha.hat4))
+{
+  tmp4[i,] <- as.numeric(1 - pnorm(alpha.hat4[i] + sigma1.hat2*sage0 + sigma2.hat2*scharlson0 + sigma3.hat2*schar1 + sigma4.hat2*stxrt1 + sigma5.hat2*stxrt2 + sigma6.hat2*stxct1 + sigma7.hat2*stxct2 + sigma8.hat2*shosp1 + sigma10.hat2*scost1, mean = 0, sd = 1))
+}
+tmp4 <- rbind(0, tmp4)
+shosp2 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp4[,i]
+  shosp2[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Hosp)), fhat = F.hat1)
+}
+
+## Estimate Cost, t = 2
+for (i in 1:length(alpha.hat5))
+{
+  tmp5[i,] <- as.numeric(1 - pnorm(alpha.hat5[i] + beta1.hat4*sage0 + beta2.hat4*scharlson0 + beta3.hat4*schar1 + beta4.hat4*stxrt1 + beta5.hat4*stxrt2 + beta6.hat4*stxct1 + beta7.hat4*stxct2 + beta8.hat4*shosp1 + beta9.hat4*shosp2 + beta10.hat4*scost1, mean = 0, sd = 1))
+}
+tmp5 <- rbind(0, tmp5)
+scost2 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp5[,i]
+  scost2[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat22$log_cost)), fhat = F.hat1)
+}
+
+Y2.g <- rbinom(M, 1, p = expit(beta1.hat3 + beta2.hat3*sage0 + beta3.hat3*scharlson0 + beta4.hat3*schar1 + beta5.hat3*stxrt1 + beta6.hat3*stxrt2 + beta7.hat3*stxct1 + beta8.hat3*stxct2 + beta9.hat3*shosp1 + beta10.hat3*shosp2 + beta11.hat3*scost1))
+
+scost2[Y2.g == 1] <- 0
+
+scost2_2 <- exp(scost2)
+
+outcome_2[1, 2] <- mean(scost2_2)
+
+sd_2[1, 2] <- sd(scost2_2)
+
+## Estimate Charlson, t = 2
+for (i in 1:length(alpha.hat3))
+{
+  tmp6[i,] <- as.numeric(1 - pnorm(alpha.hat3[i] + delta1.hat1*sage0 + delta2.hat1*scharlson0 + delta3.hat1*schar1 + delta4.hat1*stxrt1 + delta5.hat1*stxrt2 + delta6.hat1*stxct1 + delta7.hat1*stxct2 + delta8.hat1*shosp1 + delta9.hat1*shosp2 + delta10.hat1*scost1 + delta11.hat1*scost2, mean = 0, sd = 1))
+}
+tmp6 <- rbind(0, tmp6)
+schar2 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp6[,i]
+  schar2[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Charlson)), fhat = F.hat1)
+}
+
+## Estimate Hospitalizations, t = 3
+for (i in 1:length(alpha.hat4))
+{
+  tmp7[i,] <- as.numeric(1 - pnorm(alpha.hat4[i] + sigma1.hat2*sage0 + sigma2.hat2*schar1 + sigma3.hat2*schar2 + sigma4.hat2*stxrt2 + sigma5.hat2*stxrt3 + sigma6.hat2*stxct2 + sigma7.hat2*stxct3 + sigma8.hat2*shosp1 + sigma9.hat2*shosp2 + sigma10.hat2*scost1 + sigma11.hat2*scost2, mean = 0, sd = 1))
+}
+tmp7 <- rbind(0, tmp7)
+shosp3 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp7[,i]
+  shosp3[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Hosp)), fhat = F.hat1)
+}
+
+## Estimate Cost, t = 3
+for (i in 1:length(alpha.hat5))
+{
+  tmp8[i,] <- as.numeric(1 - pnorm(alpha.hat5[i] + beta1.hat4*sage0 + beta2.hat4*schar1 + beta3.hat4*schar1 + beta4.hat4*stxrt2 + beta5.hat4*stxrt3 + beta6.hat4*stxct2 + beta7.hat4*stxct3 + beta8.hat4*shosp2 + beta9.hat4*shosp3 + beta10.hat4*scost1 + beta11.hat4*scost2, mean = 0, sd = 1))
+}
+tmp8 <- rbind(0, tmp8)
+scost3 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp8[,i]
+  scost3[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat22$log_cost)), fhat = F.hat1)
+}
+
+Y3.g <- rbinom(M, 1, p = expit(beta1.hat3 + beta2.hat3*sage0 + beta3.hat3*schar1 + beta4.hat3*schar2 + beta5.hat3*stxrt2 + beta6.hat3*stxrt3 + beta7.hat3*stxct2 + beta8.hat3*stxct3 + beta9.hat3*shosp2 + beta10.hat3*shosp3 + beta11.hat3*scost1 + beta12.hat3*scost2))
+
+scost3[Y3.g == 1] <- 0
+
+scost3_2 <- exp(scost3)
+
+outcome_2[1, 3] <- mean(scost3_2)
+
+sd_2[1, 3] <- sd(scost3_2)
+
+# Treatment Trajectory 011
+
+## Set Treatment Values, t = 1
+stxrt1 <- rep(0, M)
+stxct1 <- rep(0, M)
+
+## Set Treatment Values, t = 2
+stxrt2 <- rep(1, M)
+stxct2 <- rep(0, M)
+
+## Set Treatment Values, t = 3
+stxrt3 <- rep(1, M)
+stxct3 <- rep(0, M)
+
+tmp1 <- matrix(0, nrow = length(alpha.hat1), ncol = M)
+tmp2 <- matrix(0, nrow = length(alpha.hat2), ncol = M)
+tmp3 <- matrix(0, nrow = length(alpha.hat3), ncol = M)
+tmp4 <- matrix(0, nrow = length(alpha.hat4), ncol = M)
+tmp5  <- matrix(0, nrow = length(alpha.hat5), ncol = M)
+tmp6  <- matrix(0, nrow = length(alpha.hat3), ncol = M)
+tmp7  <- matrix(0, nrow = length(alpha.hat4), ncol = M)
+tmp8  <- matrix(0, nrow = length(alpha.hat5), ncol = M)
+
+outcome_3 <- matrix(0, nrow = 1, ncol = 3)
+sd_3 <- matrix(0, nrow = 1, ncol = 3)
+
+## Sample Baseline Age and Charlson Values
+sage0 <- sample(dat0$Age_dx_0, size = M, replace = TRUE)
+scharlson0 <- as.integer(sample(dat0$Charlson, M, replace = TRUE))
+
+## Estimate Hospitalizations, t = 1
+for (i in 1:length(alpha.hat1))
+{
+  tmp1[i,] <- as.numeric(1 - pnorm(alpha.hat1[i] + sigma1.hat1*sage0 + sigma2.hat1*scharlson0 + sigma3.hat1*stxrt1 + sigma4.hat1*stxct1, mean = 0, sd = 1))
+}
+tmp1 <- rbind(0, tmp1)
+shosp1 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp1[,i]
+  shosp1[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat0$Hosp)), fhat = F.hat1)
+}
+
+## Estimate Cost, t = 1
+for (i in 1:length(alpha.hat2))
+{
+  tmp2[i,] <- as.numeric(1 - pnorm(alpha.hat2[i] + beta1.hat2*sage0 + beta2.hat2*scharlson0 + beta3.hat2*stxrt1 + beta4.hat2*stxct1 + beta5.hat2*shosp1, mean = 0, sd = 1))
+}
+tmp2 <- rbind(0, tmp2)
+scost1 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp2[,i]
+  scost1[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat2$log_cost)), fhat = F.hat1)
+}
+
+Y1.g <- rbinom(M, 1, p = expit(beta1.hat1 + beta2.hat1*sage0 + beta3.hat1*scharlson0 + beta4.hat1*stxrt1 + beta5.hat1*stxct1 + beta6.hat1*shosp1))
+
+scost1[Y1.g == 1] <- 0
+
+scost1_3 <- exp(scost1)
+
+outcome_3[1, 1] <- mean(scost1_3)
+
+sd_3[1, 1] <- sd(scost1_3)
+
+## Estimate Charlson, t = 1
+for (i in 1:length(alpha.hat3))
+{
+  tmp3[i,] <- as.numeric(1 - pnorm(alpha.hat3[i] + delta1.hat1*sage0 + delta2.hat1*scharlson0 + delta4.hat1*stxrt1 + delta6.hat1*stxct1 + delta8.hat1*shosp1 + delta10.hat1*scost1, mean = 0, sd = 1))
+}
+tmp3 <- rbind(0, tmp3)
+schar1 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp3[,i]
+  schar1[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Charlson)), fhat = F.hat1)
+}
+
+## Estimate Hospitalizations, t = 2
+for (i in 1:length(alpha.hat4))
+{
+  tmp4[i,] <- as.numeric(1 - pnorm(alpha.hat4[i] + sigma1.hat2*sage0 + sigma2.hat2*scharlson0 + sigma3.hat2*schar1 + sigma4.hat2*stxrt1 + sigma5.hat2*stxrt2 + sigma6.hat2*stxct1 + sigma7.hat2*stxct2 + sigma8.hat2*shosp1 + sigma10.hat2*scost1, mean = 0, sd = 1))
+}
+tmp4 <- rbind(0, tmp4)
+shosp2 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp4[,i]
+  shosp2[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Hosp)), fhat = F.hat1)
+}
+
+## Estimate Cost, t = 2
+for (i in 1:length(alpha.hat5))
+{
+  tmp5[i,] <- as.numeric(1 - pnorm(alpha.hat5[i] + beta1.hat4*sage0 + beta2.hat4*scharlson0 + beta3.hat4*schar1 + beta4.hat4*stxrt1 + beta5.hat4*stxrt2 + beta6.hat4*stxct1 + beta7.hat4*stxct2 + beta8.hat4*shosp1 + beta9.hat4*shosp2 + beta10.hat4*scost1, mean = 0, sd = 1))
+}
+tmp5 <- rbind(0, tmp5)
+scost2 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp5[,i]
+  scost2[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat22$log_cost)), fhat = F.hat1)
+}
+
+Y2.g <- rbinom(M, 1, p = expit(beta1.hat3 + beta2.hat3*sage0 + beta3.hat3*scharlson0 + beta4.hat3*schar1 + beta5.hat3*stxrt1 + beta6.hat3*stxrt2 + beta7.hat3*stxct1 + beta8.hat3*stxct2 + beta9.hat3*shosp1 + beta10.hat3*shosp2 + beta11.hat3*scost1))
+
+scost2[Y2.g == 1] <- 0
+
+scost2_3 <- exp(scost2)
+
+outcome_3[1, 2] <- mean(scost2_3)
+
+sd_3[1, 2] <- sd(scost2_3)
+
+## Estimate Charlson, t = 2
+for (i in 1:length(alpha.hat3))
+{
+  tmp6[i,] <- as.numeric(1 - pnorm(alpha.hat3[i] + delta1.hat1*sage0 + delta2.hat1*scharlson0 + delta3.hat1*schar1 + delta4.hat1*stxrt1 + delta5.hat1*stxrt2 + delta6.hat1*stxct1 + delta7.hat1*stxct2 + delta8.hat1*shosp1 + delta9.hat1*shosp2 + delta10.hat1*scost1 + delta11.hat1*scost2, mean = 0, sd = 1))
+}
+tmp6 <- rbind(0, tmp6)
+schar2 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp6[,i]
+  schar2[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Charlson)), fhat = F.hat1)
+}
+
+## Estimate Hospitalizations, t = 3
+for (i in 1:length(alpha.hat4))
+{
+  tmp7[i,] <- as.numeric(1 - pnorm(alpha.hat4[i] + sigma1.hat2*sage0 + sigma2.hat2*schar1 + sigma3.hat2*schar2 + sigma4.hat2*stxrt2 + sigma5.hat2*stxrt3 + sigma6.hat2*stxct2 + sigma7.hat2*stxct3 + sigma8.hat2*shosp1 + sigma9.hat2*shosp2 + sigma10.hat2*scost1 + sigma11.hat2*scost2, mean = 0, sd = 1))
+}
+tmp7 <- rbind(0, tmp7)
+shosp3 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp7[,i]
+  shosp3[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Hosp)), fhat = F.hat1)
+}
+
+## Estimate Cost, t = 3
+for (i in 1:length(alpha.hat5))
+{
+  tmp8[i,] <- as.numeric(1 - pnorm(alpha.hat5[i] + beta1.hat4*sage0 + beta2.hat4*schar1 + beta3.hat4*schar1 + beta4.hat4*stxrt2 + beta5.hat4*stxrt3 + beta6.hat4*stxct2 + beta7.hat4*stxct3 + beta8.hat4*shosp2 + beta9.hat4*shosp3 + beta10.hat4*scost1 + beta11.hat4*scost2, mean = 0, sd = 1))
+}
+tmp8 <- rbind(0, tmp8)
+scost3 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp8[,i]
+  scost3[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat22$log_cost)), fhat = F.hat1)
+}
+
+Y3.g <- rbinom(M, 1, p = expit(beta1.hat3 + beta2.hat3*sage0 + beta3.hat3*schar1 + beta4.hat3*schar2 + beta5.hat3*stxrt2 + beta6.hat3*stxrt3 + beta7.hat3*stxct2 + beta8.hat3*stxct3 + beta9.hat3*shosp2 + beta10.hat3*shosp3 + beta11.hat3*scost1 + beta12.hat3*scost2))
+
+scost3[Y3.g == 1] <- 0
+
+scost3_3 <- exp(scost3)
+
+outcome_3[1, 3] <- mean(scost3_3)
+
+sd_3[1, 3] <- sd(scost3_3)
+
+# Treatment Trajectory 111
+
+## Set Treatment Values, t = 1
+stxrt1 <- rep(1, M)
+stxct1 <- rep(0, M)
+
+## Set Treatment Values, t = 2
+stxrt2 <- rep(1, M)
+stxct2 <- rep(0, M)
+
+## Set Treatment Values, t = 3
+stxrt3 <- rep(1, M)
+stxct3 <- rep(0, M)
+
+tmp1 <- matrix(0, nrow = length(alpha.hat1), ncol = M)
+tmp2 <- matrix(0, nrow = length(alpha.hat2), ncol = M)
+tmp3 <- matrix(0, nrow = length(alpha.hat3), ncol = M)
+tmp4 <- matrix(0, nrow = length(alpha.hat4), ncol = M)
+tmp5  <- matrix(0, nrow = length(alpha.hat5), ncol = M)
+tmp6  <- matrix(0, nrow = length(alpha.hat3), ncol = M)
+tmp7  <- matrix(0, nrow = length(alpha.hat4), ncol = M)
+tmp8  <- matrix(0, nrow = length(alpha.hat5), ncol = M)
+
+outcome_4 <- matrix(0, nrow = 1, ncol = 3)
+sd_4 <- matrix(0, nrow = 1, ncol = 3)
+
+## Sample Baseline Age and Charlson Values
+sage0 <- sample(dat0$Age_dx_0, size = M, replace = TRUE)
+scharlson0 <- as.integer(sample(dat0$Charlson, M, replace = TRUE))
+
+## Estimate Hospitalizations, t = 1
+for (i in 1:length(alpha.hat1))
+{
+  tmp1[i,] <- as.numeric(1 - pnorm(alpha.hat1[i] + sigma1.hat1*sage0 + sigma2.hat1*scharlson0 + sigma3.hat1*stxrt1 + sigma4.hat1*stxct1, mean = 0, sd = 1))
+}
+tmp1 <- rbind(0, tmp1)
+shosp1 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp1[,i]
+  shosp1[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat0$Hosp)), fhat = F.hat1)
+}
+
+## Estimate Cost, t = 1
+for (i in 1:length(alpha.hat2))
+{
+  tmp2[i,] <- as.numeric(1 - pnorm(alpha.hat2[i] + beta1.hat2*sage0 + beta2.hat2*scharlson0 + beta3.hat2*stxrt1 + beta4.hat2*stxct1 + beta5.hat2*shosp1, mean = 0, sd = 1))
+}
+tmp2 <- rbind(0, tmp2)
+scost1 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp2[,i]
+  scost1[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat2$log_cost)), fhat = F.hat1)
+}
+
+Y1.g <- rbinom(M, 1, p = expit(beta1.hat1 + beta2.hat1*sage0 + beta3.hat1*scharlson0 + beta4.hat1*stxrt1 + beta5.hat1*stxct1 + beta6.hat1*shosp1))
+
+scost1[Y1.g == 1] <- 0
+
+scost1_4 <- exp(scost1)
+
+outcome_4[1, 1] <- mean(scost1_4)
+
+sd_4[1, 1] <- sd(scost1_4)
+
+## Estimate Charlson, t = 1
+for (i in 1:length(alpha.hat3))
+{
+  tmp3[i,] <- as.numeric(1 - pnorm(alpha.hat3[i] + delta1.hat1*sage0 + delta2.hat1*scharlson0 + delta4.hat1*stxrt1 + delta6.hat1*stxct1 + delta8.hat1*shosp1 + delta10.hat1*scost1, mean = 0, sd = 1))
+}
+tmp3 <- rbind(0, tmp3)
+schar1 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp3[,i]
+  schar1[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Charlson)), fhat = F.hat1)
+}
+
+## Estimate Hospitalizations, t = 2
+for (i in 1:length(alpha.hat4))
+{
+  tmp4[i,] <- as.numeric(1 - pnorm(alpha.hat4[i] + sigma1.hat2*sage0 + sigma2.hat2*scharlson0 + sigma3.hat2*schar1 + sigma4.hat2*stxrt1 + sigma5.hat2*stxrt2 + sigma6.hat2*stxct1 + sigma7.hat2*stxct2 + sigma8.hat2*shosp1 + sigma10.hat2*scost1, mean = 0, sd = 1))
+}
+tmp4 <- rbind(0, tmp4)
+shosp2 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp4[,i]
+  shosp2[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Hosp)), fhat = F.hat1)
+}
+
+## Estimate Cost, t = 2
+for (i in 1:length(alpha.hat5))
+{
+  tmp5[i,] <- as.numeric(1 - pnorm(alpha.hat5[i] + beta1.hat4*sage0 + beta2.hat4*scharlson0 + beta3.hat4*schar1 + beta4.hat4*stxrt1 + beta5.hat4*stxrt2 + beta6.hat4*stxct1 + beta7.hat4*stxct2 + beta8.hat4*shosp1 + beta9.hat4*shosp2 + beta10.hat4*scost1, mean = 0, sd = 1))
+}
+tmp5 <- rbind(0, tmp5)
+scost2 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp5[,i]
+  scost2[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat22$log_cost)), fhat = F.hat1)
+}
+
+Y2.g <- rbinom(M, 1, p = expit(beta1.hat3 + beta2.hat3*sage0 + beta3.hat3*scharlson0 + beta4.hat3*schar1 + beta5.hat3*stxrt1 + beta6.hat3*stxrt2 + beta7.hat3*stxct1 + beta8.hat3*stxct2 + beta9.hat3*shosp1 + beta10.hat3*shosp2 + beta11.hat3*scost1))
+
+scost2[Y2.g == 1] <- 0
+
+scost2_4 <- exp(scost2)
+
+outcome_4[1, 2] <- mean(scost2_4)
+
+sd_4[1, 2] <- sd(scost2_4)
+
+## Estimate Charlson, t = 2
+for (i in 1:length(alpha.hat3))
+{
+  tmp6[i,] <- as.numeric(1 - pnorm(alpha.hat3[i] + delta1.hat1*sage0 + delta2.hat1*scharlson0 + delta3.hat1*schar1 + delta4.hat1*stxrt1 + delta5.hat1*stxrt2 + delta6.hat1*stxct1 + delta7.hat1*stxct2 + delta8.hat1*shosp1 + delta9.hat1*shosp2 + delta10.hat1*scost1 + delta11.hat1*scost2, mean = 0, sd = 1))
+}
+tmp6 <- rbind(0, tmp6)
+schar2 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp6[,i]
+  schar2[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Charlson)), fhat = F.hat1)
+}
+
+## Estimate Hospitalizations, t = 3
+for (i in 1:length(alpha.hat4))
+{
+  tmp7[i,] <- as.numeric(1 - pnorm(alpha.hat4[i] + sigma1.hat2*sage0 + sigma2.hat2*schar1 + sigma3.hat2*schar2 + sigma4.hat2*stxrt2 + sigma5.hat2*stxrt3 + sigma6.hat2*stxct2 + sigma7.hat2*stxct3 + sigma8.hat2*shosp1 + sigma9.hat2*shosp2 + sigma10.hat2*scost1 + sigma11.hat2*scost2, mean = 0, sd = 1))
+}
+tmp7 <- rbind(0, tmp7)
+shosp3 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp7[,i]
+  shosp3[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Hosp)), fhat = F.hat1)
+}
+
+## Estimate Cost, t = 3
+for (i in 1:length(alpha.hat5))
+{
+  tmp8[i,] <- as.numeric(1 - pnorm(alpha.hat5[i] + beta1.hat4*sage0 + beta2.hat4*schar1 + beta3.hat4*schar1 + beta4.hat4*stxrt2 + beta5.hat4*stxrt3 + beta6.hat4*stxct2 + beta7.hat4*stxct3 + beta8.hat4*shosp2 + beta9.hat4*shosp3 + beta10.hat4*scost1 + beta11.hat4*scost2, mean = 0, sd = 1))
+}
+tmp8 <- rbind(0, tmp8)
+scost3 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp8[,i]
+  scost3[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat22$log_cost)), fhat = F.hat1)
+}
+
+Y3.g <- rbinom(M, 1, p = expit(beta1.hat3 + beta2.hat3*sage0 + beta3.hat3*schar1 + beta4.hat3*schar2 + beta5.hat3*stxrt2 + beta6.hat3*stxrt3 + beta7.hat3*stxct2 + beta8.hat3*stxct3 + beta9.hat3*shosp2 + beta10.hat3*shosp3 + beta11.hat3*scost1 + beta12.hat3*scost2))
+
+scost3[Y3.g == 1] <- 0
+
+scost3_4 <- exp(scost3)
+
+outcome_4[1, 3] <- mean(scost3_4)
+
+sd_4[1, 3] <- sd(scost3_4)
+
+## Stage 1B
+
+## Stage 1B at baseline
+dat0 <- subset(dat_long, dat_long$time == 1 & dat_long$Stage_0 == 1)
+
+## Hospitalization model
+xx <- orm(Hosp ~ Age_dx_0 + Charlson + TxRT + TxCT, data = dat0, family = "probit")
+alpha.hat1 <- as.numeric(xx$coef[-c((length(xx$coef) - 3):length(xx$coef))])
+sigma1.hat1 <- as.numeric(xx$coef[length(xx$coef) - 3]) 
+sigma2.hat1 <- as.numeric(xx$coef[length(xx$coef) - 2]) 
+sigma3.hat1 <- as.numeric(xx$coef[length(xx$coef) - 1]) 
+sigma4.hat1 <- as.numeric(xx$coef[length(xx$coef)]) 
+
+## Subset basline data to only include observations for which the cost is greater than zero
+dat2 <- subset(dat0, dat0$log_cost > 0)
+
+## Cost Model, Cost = 0 
+reg.y1 <- glm(cost_ind ~ Age_dx_0 + Charlson + TxRT + TxCT + Hosp, family = binomial(link = "logit"), data = dat0, maxit = 100)
+beta1.hat1 <- reg.y1$coefficients[1]
+beta2.hat1 <- reg.y1$coefficients[2]
+beta3.hat1 <- reg.y1$coefficients[3]
+beta4.hat1 <- reg.y1$coefficients[4]
+beta5.hat1 <- reg.y1$coefficients[5]
+beta6.hat1 <- reg.y1$coefficients[6]
+sd.hat1 <- sd(reg.y1$residuals)
+
+## Cost Model, Cost > 0
+reg.y2 <- orm(log_cost ~ Age_dx_0 + Charlson + TxRT + TxCT + Hosp, data = dat2, family = "probit")
+alpha.hat2 <- as.numeric(reg.y2$coef[-c((length(reg.y2$coef) - 4):length(reg.y2$coef))])
+beta1.hat2 <- as.numeric(reg.y2$coef[length(reg.y2$coef) - 4])
+beta2.hat2 <- as.numeric(reg.y2$coef[length(reg.y2$coef) - 3]) 
+beta3.hat2 <- as.numeric(reg.y2$coef[length(reg.y2$coef) - 2]) 
+beta4.hat2 <- as.numeric(reg.y2$coef[length(reg.y2$coef) - 1]) 
+beta5.hat2 <- as.numeric(reg.y2$coef[length(reg.y2$coef)]) 
+
+## Stage 1B at times 2 and 3
+dat02 <- subset(dat_long, dat_long$time > 1 & dat_long$Stage_0 == 1)
+
+## Charlson model (all at once - including appropriate lagged variables)
+zz <- orm(Charlson ~ Age_dx_0 + lagCharlson1 + lagCharlson2 + lagTxRT1 + lagTxRT2 + lagTxCT1 + lagTxCT2 + lagHosp1 + lagHosp2 + lagCost1 + lagCost2, data = dat02, family = "probit")
+alpha.hat3 <- as.numeric(zz$coef[-c((length(zz$coef) - 10):length(zz$coef))])
+delta1.hat1 <- as.numeric(zz$coef[length(zz$coef) - 10])
+delta2.hat1 <- as.numeric(zz$coef[length(zz$coef) - 9])
+delta3.hat1 <- as.numeric(zz$coef[length(zz$coef) - 8])
+delta4.hat1 <- as.numeric(zz$coef[length(zz$coef) - 7])
+delta5.hat1 <- as.numeric(zz$coef[length(zz$coef) - 6])
+delta6.hat1 <- as.numeric(zz$coef[length(zz$coef) - 5])
+delta7.hat1 <- as.numeric(zz$coef[length(zz$coef) - 4])
+delta8.hat1 <- as.numeric(zz$coef[length(zz$coef) - 3]) 
+delta9.hat1 <- as.numeric(zz$coef[length(zz$coef) - 2]) 
+delta10.hat1 <- as.numeric(zz$coef[length(zz$coef) - 1]) 
+delta11.hat1 <- as.numeric(zz$coef[length(zz$coef)]) 
+
+## Hospitalization model - Times 2 and 3 with lagged variables
+xx2 <- orm(Hosp ~ Age_dx_0 + lagCharlson1 + lagCharlson2 + lagTxRT1 + lagTxRT2 + lagTxCT1 + lagTxCT2 + lagHosp1 + lagHosp2 + lagCost1 + lagCost2, data = dat02, family = "probit", maxit = 20)
+alpha.hat4 <- as.numeric(xx2$coef[-c((length(xx2$coef) - 10):length(xx2$coef))])
+sigma1.hat2 <- as.numeric(xx2$coef[length(xx2$coef) - 10]) 
+sigma2.hat2 <- as.numeric(xx2$coef[length(xx2$coef) - 9]) 
+sigma3.hat2 <- as.numeric(xx2$coef[length(xx2$coef) - 8]) 
+sigma4.hat2 <- as.numeric(xx2$coef[length(xx2$coef) - 7]) 
+sigma5.hat2 <- as.numeric(xx2$coef[length(xx2$coef) - 6]) 
+sigma6.hat2 <- as.numeric(xx2$coef[length(xx2$coef) - 5]) 
+sigma7.hat2 <- as.numeric(xx2$coef[length(xx2$coef) - 4]) 
+sigma8.hat2 <- as.numeric(xx2$coef[length(xx2$coef) - 3]) 
+sigma9.hat2 <- as.numeric(xx2$coef[length(xx2$coef) - 2]) 
+sigma10.hat2 <- as.numeric(xx2$coef[length(xx2$coef) - 1]) 
+sigma11.hat2 <- as.numeric(xx2$coef[length(xx2$coef)]) 
+
+## Cost model - Times 2 and 3 with lagged variables
+
+## Subset data to only include observations for which the cost is greater than zero
+dat22 <- subset(dat02, dat02$Cost > 0)
+
+## Cost Model, Cost = 0 
+reg.y3 <- glm(cost_ind ~ Age_dx_0 + lagCharlson1 + lagCharlson2 + lagTxRT1 + lagTxRT2 + lagTxCT1 + lagTxCT2 + lagHosp1 + lagHosp2 + lagCost1 + lagCost2, family = binomial(link = "logit"), data = dat02, maxit = 100)
+beta1.hat3 <- reg.y3$coefficients[1]
+beta2.hat3 <- reg.y3$coefficients[2]
+beta3.hat3 <- reg.y3$coefficients[3]
+beta4.hat3 <- reg.y3$coefficients[4]
+beta5.hat3 <- reg.y3$coefficients[5]
+beta6.hat3 <- reg.y3$coefficients[6]
+beta7.hat3 <- reg.y3$coefficients[7]
+beta8.hat3 <- reg.y3$coefficients[8]
+beta9.hat3 <- reg.y3$coefficients[9]
+beta10.hat3 <- reg.y3$coefficients[10]
+beta11.hat3 <- reg.y3$coefficients[11]
+beta12.hat3 <- reg.y3$coefficients[12]
+sd.hat2 <- sd(reg.y3$residuals)
+
+## Cost Model, Cost > 0
+reg.y4 <- orm(log_cost ~ Age_dx_0 + lagCharlson1 + lagCharlson2 + lagTxRT1 + lagTxRT2 + lagTxCT1 + lagTxCT2 + lagHosp1 + lagHosp2 + lagCost1 + lagCost2, data = dat22, family = "probit") 
+alpha.hat5 <- as.numeric(reg.y4$coef[-c((length(reg.y4$coef) - 10):length(reg.y4$coef))])
+beta1.hat4 <- as.numeric(reg.y4$coef[length(reg.y4$coef) - 10])
+beta2.hat4 <- as.numeric(reg.y4$coef[length(reg.y4$coef) - 9])
+beta3.hat4 <- as.numeric(reg.y4$coef[length(reg.y4$coef) - 8])
+beta4.hat4 <- as.numeric(reg.y4$coef[length(reg.y4$coef) - 7])
+beta5.hat4 <- as.numeric(reg.y4$coef[length(reg.y4$coef) - 6])
+beta6.hat4 <- as.numeric(reg.y4$coef[length(reg.y4$coef) - 5])
+beta7.hat4 <- as.numeric(reg.y4$coef[length(reg.y4$coef) - 4])
+beta8.hat4 <- as.numeric(reg.y4$coef[length(reg.y4$coef) - 3]) 
+beta9.hat4 <- as.numeric(reg.y4$coef[length(reg.y4$coef) - 2]) 
+beta10.hat4 <- as.numeric(reg.y4$coef[length(reg.y4$coef) - 1]) 
+beta11.hat4 <- as.numeric(reg.y4$coef[length(reg.y4$coef)]) 
+
+# Treatment Trajectory 000
+
+## Set Treatment Values, t = 1
+stxrt1 <- rep(0, M)
+stxct1 <- rep(0, M)
+
+## Set Treatment Values, t = 2
+stxrt2 <- rep(0, M)
+stxct2 <- rep(0, M)
+
+## Set Treatment Values, t = 3
+stxrt3 <- rep(0, M)
+stxct3 <- rep(0, M)
+
+tmp1 <- matrix(0, nrow = length(alpha.hat1), ncol = M)
+tmp2 <- matrix(0, nrow = length(alpha.hat2), ncol = M)
+tmp3 <- matrix(0, nrow = length(alpha.hat3), ncol = M)
+tmp4 <- matrix(0, nrow = length(alpha.hat4), ncol = M)
+tmp5  <- matrix(0, nrow = length(alpha.hat5), ncol = M)
+tmp6  <- matrix(0, nrow = length(alpha.hat3), ncol = M)
+tmp7  <- matrix(0, nrow = length(alpha.hat4), ncol = M)
+tmp8  <- matrix(0, nrow = length(alpha.hat5), ncol = M)
+
+outcome_5 <- matrix(0, nrow = 1, ncol = 3)
+sd_5 <- matrix(0, nrow = 1, ncol = 3)
+
+## Sample Baseline Age and Charlson Values
+sage0 <- sample(dat0$Age_dx_0, size = M, replace = TRUE)
+scharlson0 <- as.integer(sample(dat0$Charlson, M, replace = TRUE))
+
+## Estimate Hospitalizations, t = 1
+for (i in 1:length(alpha.hat1))
+{
+  tmp1[i,] <- as.numeric(1 - pnorm(alpha.hat1[i] + sigma1.hat1*sage0 + sigma2.hat1*scharlson0 + sigma3.hat1*stxrt1 + sigma4.hat1*stxct1, mean = 0, sd = 1))
+}
+tmp1 <- rbind(0, tmp1)
+shosp1 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp1[,i]
+  shosp1[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat0$Hosp)), fhat = F.hat1)
+}
+
+## Estimate Cost, t = 1
+for (i in 1:length(alpha.hat2))
+{
+  tmp2[i,] <- as.numeric(1 - pnorm(alpha.hat2[i] + beta1.hat2*sage0 + beta2.hat2*scharlson0 + beta3.hat2*stxrt1 + beta4.hat2*stxct1 + beta5.hat2*shosp1, mean = 0, sd = 1))
+}
+tmp2 <- rbind(0, tmp2)
+scost1 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp2[,i]
+  scost1[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat2$log_cost)), fhat = F.hat1)
+}
+
+Y1.g <- rbinom(M, 1, p = expit(beta1.hat1 + beta2.hat1*sage0 + beta3.hat1*scharlson0 + beta4.hat1*stxrt1 + beta5.hat1*stxct1 + beta6.hat1*shosp1))
+
+scost1[Y1.g == 1] <- 0
+
+scost1_5 <- exp(scost1)
+
+outcome_5[1, 1] <- mean(scost1_5)
+
+sd_5[1, 1] <- sd(scost1_5)
+
+## Estimate Charlson, t = 1
+for (i in 1:length(alpha.hat3))
+{
+  tmp3[i,] <- as.numeric(1 - pnorm(alpha.hat3[i] + delta1.hat1*sage0 + delta2.hat1*scharlson0 + delta4.hat1*stxrt1 + delta6.hat1*stxct1 + delta8.hat1*shosp1 + delta10.hat1*scost1, mean = 0, sd = 1))
+}
+tmp3 <- rbind(0, tmp3)
+schar1 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp3[,i]
+  schar1[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Charlson)), fhat = F.hat1)
+}
+
+## Estimate Hospitalizations, t = 2
+for (i in 1:length(alpha.hat4))
+{
+  tmp4[i,] <- as.numeric(1 - pnorm(alpha.hat4[i] + sigma1.hat2*sage0 + sigma2.hat2*scharlson0 + sigma3.hat2*schar1 + sigma4.hat2*stxrt1 + sigma5.hat2*stxrt2 + sigma6.hat2*stxct1 + sigma7.hat2*stxct2 + sigma8.hat2*shosp1 + sigma10.hat2*scost1, mean = 0, sd = 1))
+}
+tmp4 <- rbind(0, tmp4)
+shosp2 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp4[,i]
+  shosp2[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Hosp)), fhat = F.hat1)
+}
+
+## Estimate Cost, t = 2
+for (i in 1:length(alpha.hat5))
+{
+  tmp5[i,] <- as.numeric(1 - pnorm(alpha.hat5[i] + beta1.hat4*sage0 + beta2.hat4*scharlson0 + beta3.hat4*schar1 + beta4.hat4*stxrt1 + beta5.hat4*stxrt2 + beta6.hat4*stxct1 + beta7.hat4*stxct2 + beta8.hat4*shosp1 + beta9.hat4*shosp2 + beta10.hat4*scost1, mean = 0, sd = 1))
+}
+tmp5 <- rbind(0, tmp5)
+scost2 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp5[,i]
+  scost2[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat22$log_cost)), fhat = F.hat1)
+}
+
+Y2.g <- rbinom(M, 1, p = expit(beta1.hat3 + beta2.hat3*sage0 + beta3.hat3*scharlson0 + beta4.hat3*schar1 + beta5.hat3*stxrt1 + beta6.hat3*stxrt2 + beta7.hat3*stxct1 + beta8.hat3*stxct2 + beta9.hat3*shosp1 + beta10.hat3*shosp2 + beta11.hat3*scost1))
+
+scost2[Y2.g == 1] <- 0
+
+scost2_5 <- exp(scost2)
+
+outcome_5[1, 2] <- mean(scost2_5)
+
+sd_5[1, 2] <- sd(scost2_5)
+
+## Estimate Charlson, t = 2
+for (i in 1:length(alpha.hat3))
+{
+  tmp6[i,] <- as.numeric(1 - pnorm(alpha.hat3[i] + delta1.hat1*sage0 + delta2.hat1*scharlson0 + delta3.hat1*schar1 + delta4.hat1*stxrt1 + delta5.hat1*stxrt2 + delta6.hat1*stxct1 + delta7.hat1*stxct2 + delta8.hat1*shosp1 + delta9.hat1*shosp2 + delta10.hat1*scost1 + delta11.hat1*scost2, mean = 0, sd = 1))
+}
+tmp6 <- rbind(0, tmp6)
+schar2 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp6[,i]
+  schar2[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Charlson)), fhat = F.hat1)
+}
+
+## Estimate Hospitalizations, t = 3
+for (i in 1:length(alpha.hat4))
+{
+  tmp7[i,] <- as.numeric(1 - pnorm(alpha.hat4[i] + sigma1.hat2*sage0 + sigma2.hat2*schar1 + sigma3.hat2*schar2 + sigma4.hat2*stxrt2 + sigma5.hat2*stxrt3 + sigma6.hat2*stxct2 + sigma7.hat2*stxct3 + sigma8.hat2*shosp1 + sigma9.hat2*shosp2 + sigma10.hat2*scost1 + sigma11.hat2*scost2, mean = 0, sd = 1))
+}
+tmp7 <- rbind(0, tmp7)
+shosp3 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp7[,i]
+  shosp3[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Hosp)), fhat = F.hat1)
+}
+
+## Estimate Cost, t = 3
+for (i in 1:length(alpha.hat5))
+{
+  tmp8[i,] <- as.numeric(1 - pnorm(alpha.hat5[i] + beta1.hat4*sage0 + beta2.hat4*schar1 + beta3.hat4*schar1 + beta4.hat4*stxrt2 + beta5.hat4*stxrt3 + beta6.hat4*stxct2 + beta7.hat4*stxct3 + beta8.hat4*shosp2 + beta9.hat4*shosp3 + beta10.hat4*scost1 + beta11.hat4*scost2, mean = 0, sd = 1))
+}
+tmp8 <- rbind(0, tmp8)
+scost3 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp8[,i]
+  scost3[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat22$log_cost)), fhat = F.hat1)
+}
+
+Y3.g <- rbinom(M, 1, p = expit(beta1.hat3 + beta2.hat3*sage0 + beta3.hat3*schar1 + beta4.hat3*schar2 + beta5.hat3*stxrt2 + beta6.hat3*stxrt3 + beta7.hat3*stxct2 + beta8.hat3*stxct3 + beta9.hat3*shosp2 + beta10.hat3*shosp3 + beta11.hat3*scost1 + beta12.hat3*scost2))
+
+scost3[Y3.g == 1] <- 0
+
+scost3_5 <- exp(scost3)
+
+outcome_5[1, 3] <- mean(scost3_5)
+
+sd_5[1, 3] <- sd(scost3_5)
+
+# Treatment Trajectory 001
+
+## Set Treatment Values, t = 1
+stxrt1 <- rep(0, M)
+stxct1 <- rep(0, M)
+
+## Set Treatment Values, t = 2
+stxrt2 <- rep(0, M)
+stxct2 <- rep(0, M)
+
+## Set Treatment Values, t = 3
+stxrt3 <- rep(1, M)
+stxct3 <- rep(0, M)
+
+tmp1 <- matrix(0, nrow = length(alpha.hat1), ncol = M)
+tmp2 <- matrix(0, nrow = length(alpha.hat2), ncol = M)
+tmp3 <- matrix(0, nrow = length(alpha.hat3), ncol = M)
+tmp4 <- matrix(0, nrow = length(alpha.hat4), ncol = M)
+tmp5  <- matrix(0, nrow = length(alpha.hat5), ncol = M)
+tmp6  <- matrix(0, nrow = length(alpha.hat3), ncol = M)
+tmp7  <- matrix(0, nrow = length(alpha.hat4), ncol = M)
+tmp8  <- matrix(0, nrow = length(alpha.hat5), ncol = M)
+
+outcome_6 <- matrix(0, nrow = 1, ncol = 3)
+sd_6 <- matrix(0, nrow = 1, ncol = 3)
+
+## Sample Baseline Age and Charlson Values
+sage0 <- sample(dat0$Age_dx_0, size = M, replace = TRUE)
+scharlson0 <- as.integer(sample(dat0$Charlson, M, replace = TRUE))
+
+## Estimate Hospitalizations, t = 1
+for (i in 1:length(alpha.hat1))
+{
+  tmp1[i,] <- as.numeric(1 - pnorm(alpha.hat1[i] + sigma1.hat1*sage0 + sigma2.hat1*scharlson0 + sigma3.hat1*stxrt1 + sigma4.hat1*stxct1, mean = 0, sd = 1))
+}
+tmp1 <- rbind(0, tmp1)
+shosp1 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp1[,i]
+  shosp1[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat0$Hosp)), fhat = F.hat1)
+}
+
+## Estimate Cost, t = 1
+for (i in 1:length(alpha.hat2))
+{
+  tmp2[i,] <- as.numeric(1 - pnorm(alpha.hat2[i] + beta1.hat2*sage0 + beta2.hat2*scharlson0 + beta3.hat2*stxrt1 + beta4.hat2*stxct1 + beta5.hat2*shosp1, mean = 0, sd = 1))
+}
+tmp2 <- rbind(0, tmp2)
+scost1 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp2[,i]
+  scost1[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat2$log_cost)), fhat = F.hat1)
+}
+
+Y1.g <- rbinom(M, 1, p = expit(beta1.hat1 + beta2.hat1*sage0 + beta3.hat1*scharlson0 + beta4.hat1*stxrt1 + beta5.hat1*stxct1 + beta6.hat1*shosp1))
+
+scost1[Y1.g == 1] <- 0
+
+scost1_6 <- exp(scost1)
+
+outcome_6[1, 1] <- mean(scost1_6)
+
+sd_6[1, 1] <- sd(scost1_6)
+
+## Estimate Charlson, t = 1
+for (i in 1:length(alpha.hat3))
+{
+  tmp3[i,] <- as.numeric(1 - pnorm(alpha.hat3[i] + delta1.hat1*sage0 + delta2.hat1*scharlson0 + delta4.hat1*stxrt1 + delta6.hat1*stxct1 + delta8.hat1*shosp1 + delta10.hat1*scost1, mean = 0, sd = 1))
+}
+tmp3 <- rbind(0, tmp3)
+schar1 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp3[,i]
+  schar1[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Charlson)), fhat = F.hat1)
+}
+
+## Estimate Hospitalizations, t = 2
+for (i in 1:length(alpha.hat4))
+{
+  tmp4[i,] <- as.numeric(1 - pnorm(alpha.hat4[i] + sigma1.hat2*sage0 + sigma2.hat2*scharlson0 + sigma3.hat2*schar1 + sigma4.hat2*stxrt1 + sigma5.hat2*stxrt2 + sigma6.hat2*stxct1 + sigma7.hat2*stxct2 + sigma8.hat2*shosp1 + sigma10.hat2*scost1, mean = 0, sd = 1))
+}
+tmp4 <- rbind(0, tmp4)
+shosp2 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp4[,i]
+  shosp2[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Hosp)), fhat = F.hat1)
+}
+
+## Estimate Cost, t = 2
+for (i in 1:length(alpha.hat5))
+{
+  tmp5[i,] <- as.numeric(1 - pnorm(alpha.hat5[i] + beta1.hat4*sage0 + beta2.hat4*scharlson0 + beta3.hat4*schar1 + beta4.hat4*stxrt1 + beta5.hat4*stxrt2 + beta6.hat4*stxct1 + beta7.hat4*stxct2 + beta8.hat4*shosp1 + beta9.hat4*shosp2 + beta10.hat4*scost1, mean = 0, sd = 1))
+}
+tmp5 <- rbind(0, tmp5)
+scost2 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp5[,i]
+  scost2[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat22$log_cost)), fhat = F.hat1)
+}
+
+Y2.g <- rbinom(M, 1, p = expit(beta1.hat3 + beta2.hat3*sage0 + beta3.hat3*scharlson0 + beta4.hat3*schar1 + beta5.hat3*stxrt1 + beta6.hat3*stxrt2 + beta7.hat3*stxct1 + beta8.hat3*stxct2 + beta9.hat3*shosp1 + beta10.hat3*shosp2 + beta11.hat3*scost1))
+
+scost2[Y2.g == 1] <- 0
+
+scost2_6 <- exp(scost2)
+
+outcome_6[1, 2] <- mean(scost2_6)
+
+sd_6[1, 2] <- sd(scost2_6)
+
+## Estimate Charlson, t = 2
+for (i in 1:length(alpha.hat3))
+{
+  tmp6[i,] <- as.numeric(1 - pnorm(alpha.hat3[i] + delta1.hat1*sage0 + delta2.hat1*scharlson0 + delta3.hat1*schar1 + delta4.hat1*stxrt1 + delta5.hat1*stxrt2 + delta6.hat1*stxct1 + delta7.hat1*stxct2 + delta8.hat1*shosp1 + delta9.hat1*shosp2 + delta10.hat1*scost1 + delta11.hat1*scost2, mean = 0, sd = 1))
+}
+tmp6 <- rbind(0, tmp6)
+schar2 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp6[,i]
+  schar2[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Charlson)), fhat = F.hat1)
+}
+
+## Estimate Hospitalizations, t = 3
+for (i in 1:length(alpha.hat4))
+{
+  tmp7[i,] <- as.numeric(1 - pnorm(alpha.hat4[i] + sigma1.hat2*sage0 + sigma2.hat2*schar1 + sigma3.hat2*schar2 + sigma4.hat2*stxrt2 + sigma5.hat2*stxrt3 + sigma6.hat2*stxct2 + sigma7.hat2*stxct3 + sigma8.hat2*shosp1 + sigma9.hat2*shosp2 + sigma10.hat2*scost1 + sigma11.hat2*scost2, mean = 0, sd = 1))
+}
+tmp7 <- rbind(0, tmp7)
+shosp3 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp7[,i]
+  shosp3[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Hosp)), fhat = F.hat1)
+}
+
+## Estimate Cost, t = 3
+for (i in 1:length(alpha.hat5))
+{
+  tmp8[i,] <- as.numeric(1 - pnorm(alpha.hat5[i] + beta1.hat4*sage0 + beta2.hat4*schar1 + beta3.hat4*schar1 + beta4.hat4*stxrt2 + beta5.hat4*stxrt3 + beta6.hat4*stxct2 + beta7.hat4*stxct3 + beta8.hat4*shosp2 + beta9.hat4*shosp3 + beta10.hat4*scost1 + beta11.hat4*scost2, mean = 0, sd = 1))
+}
+tmp8 <- rbind(0, tmp8)
+scost3 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp8[,i]
+  scost3[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat22$log_cost)), fhat = F.hat1)
+}
+
+Y3.g <- rbinom(M, 1, p = expit(beta1.hat3 + beta2.hat3*sage0 + beta3.hat3*schar1 + beta4.hat3*schar2 + beta5.hat3*stxrt2 + beta6.hat3*stxrt3 + beta7.hat3*stxct2 + beta8.hat3*stxct3 + beta9.hat3*shosp2 + beta10.hat3*shosp3 + beta11.hat3*scost1 + beta12.hat3*scost2))
+
+scost3[Y3.g == 1] <- 0
+
+scost3_6 <- exp(scost3)
+
+outcome_6[1, 3] <- mean(scost3_6)
+
+sd_6[1, 3] <- sd(scost3_6)
+
+# Treatment Trajectory 011
+
+## Set Treatment Values, t = 1
+stxrt1 <- rep(0, M)
+stxct1 <- rep(0, M)
+
+## Set Treatment Values, t = 2
+stxrt2 <- rep(1, M)
+stxct2 <- rep(0, M)
+
+## Set Treatment Values, t = 3
+stxrt3 <- rep(1, M)
+stxct3 <- rep(0, M)
+
+tmp1 <- matrix(0, nrow = length(alpha.hat1), ncol = M)
+tmp2 <- matrix(0, nrow = length(alpha.hat2), ncol = M)
+tmp3 <- matrix(0, nrow = length(alpha.hat3), ncol = M)
+tmp4 <- matrix(0, nrow = length(alpha.hat4), ncol = M)
+tmp5  <- matrix(0, nrow = length(alpha.hat5), ncol = M)
+tmp6  <- matrix(0, nrow = length(alpha.hat3), ncol = M)
+tmp7  <- matrix(0, nrow = length(alpha.hat4), ncol = M)
+tmp8  <- matrix(0, nrow = length(alpha.hat5), ncol = M)
+
+outcome_7 <- matrix(0, nrow = 1, ncol = 3)
+sd_7 <- matrix(0, nrow = 1, ncol = 3)
+
+## Sample Baseline Age and Charlson Values
+sage0 <- sample(dat0$Age_dx_0, size = M, replace = TRUE)
+scharlson0 <- as.integer(sample(dat0$Charlson, M, replace = TRUE))
+
+## Estimate Hospitalizations, t = 1
+for (i in 1:length(alpha.hat1))
+{
+  tmp1[i,] <- as.numeric(1 - pnorm(alpha.hat1[i] + sigma1.hat1*sage0 + sigma2.hat1*scharlson0 + sigma3.hat1*stxrt1 + sigma4.hat1*stxct1, mean = 0, sd = 1))
+}
+tmp1 <- rbind(0, tmp1)
+shosp1 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp1[,i]
+  shosp1[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat0$Hosp)), fhat = F.hat1)
+}
+
+## Estimate Cost, t = 1
+for (i in 1:length(alpha.hat2))
+{
+  tmp2[i,] <- as.numeric(1 - pnorm(alpha.hat2[i] + beta1.hat2*sage0 + beta2.hat2*scharlson0 + beta3.hat2*stxrt1 + beta4.hat2*stxct1 + beta5.hat2*shosp1, mean = 0, sd = 1))
+}
+tmp2 <- rbind(0, tmp2)
+scost1 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp2[,i]
+  scost1[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat2$log_cost)), fhat = F.hat1)
+}
+
+Y1.g <- rbinom(M, 1, p = expit(beta1.hat1 + beta2.hat1*sage0 + beta3.hat1*scharlson0 + beta4.hat1*stxrt1 + beta5.hat1*stxct1 + beta6.hat1*shosp1))
+
+scost1[Y1.g == 1] <- 0
+
+scost1_7 <- exp(scost1)
+
+outcome_7[1, 1] <- mean(scost1_7)
+
+sd_7[1, 1] <- sd(scost1_7)
+
+## Estimate Charlson, t = 1
+for (i in 1:length(alpha.hat3))
+{
+  tmp3[i,] <- as.numeric(1 - pnorm(alpha.hat3[i] + delta1.hat1*sage0 + delta2.hat1*scharlson0 + delta4.hat1*stxrt1 + delta6.hat1*stxct1 + delta8.hat1*shosp1 + delta10.hat1*scost1, mean = 0, sd = 1))
+}
+tmp3 <- rbind(0, tmp3)
+schar1 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp3[,i]
+  schar1[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Charlson)), fhat = F.hat1)
+}
+
+## Estimate Hospitalizations, t = 2
+for (i in 1:length(alpha.hat4))
+{
+  tmp4[i,] <- as.numeric(1 - pnorm(alpha.hat4[i] + sigma1.hat2*sage0 + sigma2.hat2*scharlson0 + sigma3.hat2*schar1 + sigma4.hat2*stxrt1 + sigma5.hat2*stxrt2 + sigma6.hat2*stxct1 + sigma7.hat2*stxct2 + sigma8.hat2*shosp1 + sigma10.hat2*scost1, mean = 0, sd = 1))
+}
+tmp4 <- rbind(0, tmp4)
+shosp2 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp4[,i]
+  shosp2[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Hosp)), fhat = F.hat1)
+}
+
+## Estimate Cost, t = 2
+for (i in 1:length(alpha.hat5))
+{
+  tmp5[i,] <- as.numeric(1 - pnorm(alpha.hat5[i] + beta1.hat4*sage0 + beta2.hat4*scharlson0 + beta3.hat4*schar1 + beta4.hat4*stxrt1 + beta5.hat4*stxrt2 + beta6.hat4*stxct1 + beta7.hat4*stxct2 + beta8.hat4*shosp1 + beta9.hat4*shosp2 + beta10.hat4*scost1, mean = 0, sd = 1))
+}
+tmp5 <- rbind(0, tmp5)
+scost2 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp5[,i]
+  scost2[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat22$log_cost)), fhat = F.hat1)
+}
+
+Y2.g <- rbinom(M, 1, p = expit(beta1.hat3 + beta2.hat3*sage0 + beta3.hat3*scharlson0 + beta4.hat3*schar1 + beta5.hat3*stxrt1 + beta6.hat3*stxrt2 + beta7.hat3*stxct1 + beta8.hat3*stxct2 + beta9.hat3*shosp1 + beta10.hat3*shosp2 + beta11.hat3*scost1))
+
+scost2[Y2.g == 1] <- 0
+
+scost2_7 <- exp(scost2)
+
+outcome_7[1, 2] <- mean(scost2_7)
+
+sd_7[1, 2] <- sd(scost2_7)
+
+## Estimate Charlson, t = 2
+for (i in 1:length(alpha.hat3))
+{
+  tmp6[i,] <- as.numeric(1 - pnorm(alpha.hat3[i] + delta1.hat1*sage0 + delta2.hat1*scharlson0 + delta3.hat1*schar1 + delta4.hat1*stxrt1 + delta5.hat1*stxrt2 + delta6.hat1*stxct1 + delta7.hat1*stxct2 + delta8.hat1*shosp1 + delta9.hat1*shosp2 + delta10.hat1*scost1 + delta11.hat1*scost2, mean = 0, sd = 1))
+}
+tmp6 <- rbind(0, tmp6)
+schar2 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp6[,i]
+  schar2[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Charlson)), fhat = F.hat1)
+}
+
+## Estimate Hospitalizations, t = 3
+for (i in 1:length(alpha.hat4))
+{
+  tmp7[i,] <- as.numeric(1 - pnorm(alpha.hat4[i] + sigma1.hat2*sage0 + sigma2.hat2*schar1 + sigma3.hat2*schar2 + sigma4.hat2*stxrt2 + sigma5.hat2*stxrt3 + sigma6.hat2*stxct2 + sigma7.hat2*stxct3 + sigma8.hat2*shosp1 + sigma9.hat2*shosp2 + sigma10.hat2*scost1 + sigma11.hat2*scost2, mean = 0, sd = 1))
+}
+tmp7 <- rbind(0, tmp7)
+shosp3 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp7[,i]
+  shosp3[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Hosp)), fhat = F.hat1)
+}
+
+## Estimate Cost, t = 3
+for (i in 1:length(alpha.hat5))
+{
+  tmp8[i,] <- as.numeric(1 - pnorm(alpha.hat5[i] + beta1.hat4*sage0 + beta2.hat4*schar1 + beta3.hat4*schar1 + beta4.hat4*stxrt2 + beta5.hat4*stxrt3 + beta6.hat4*stxct2 + beta7.hat4*stxct3 + beta8.hat4*shosp2 + beta9.hat4*shosp3 + beta10.hat4*scost1 + beta11.hat4*scost2, mean = 0, sd = 1))
+}
+tmp8 <- rbind(0, tmp8)
+scost3 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp8[,i]
+  scost3[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat22$log_cost)), fhat = F.hat1)
+}
+
+Y3.g <- rbinom(M, 1, p = expit(beta1.hat3 + beta2.hat3*sage0 + beta3.hat3*schar1 + beta4.hat3*schar2 + beta5.hat3*stxrt2 + beta6.hat3*stxrt3 + beta7.hat3*stxct2 + beta8.hat3*stxct3 + beta9.hat3*shosp2 + beta10.hat3*shosp3 + beta11.hat3*scost1 + beta12.hat3*scost2))
+
+scost3[Y3.g == 1] <- 0
+
+scost3_7 <- exp(scost3)
+
+outcome_7[1, 3] <- mean(scost3_7)
+
+sd_7[1, 3] <- sd(scost3_7)
+
+# Treatment Trajectory 111
+
+## Set Treatment Values, t = 1
+stxrt1 <- rep(1, M)
+stxct1 <- rep(0, M)
+
+## Set Treatment Values, t = 2
+stxrt2 <- rep(1, M)
+stxct2 <- rep(0, M)
+
+## Set Treatment Values, t = 3
+stxrt3 <- rep(1, M)
+stxct3 <- rep(0, M)
+
+tmp1 <- matrix(0, nrow = length(alpha.hat1), ncol = M)
+tmp2 <- matrix(0, nrow = length(alpha.hat2), ncol = M)
+tmp3 <- matrix(0, nrow = length(alpha.hat3), ncol = M)
+tmp4 <- matrix(0, nrow = length(alpha.hat4), ncol = M)
+tmp5  <- matrix(0, nrow = length(alpha.hat5), ncol = M)
+tmp6  <- matrix(0, nrow = length(alpha.hat3), ncol = M)
+tmp7  <- matrix(0, nrow = length(alpha.hat4), ncol = M)
+tmp8  <- matrix(0, nrow = length(alpha.hat5), ncol = M)
+
+outcome_8 <- matrix(0, nrow = 1, ncol = 3)
+sd_8 <- matrix(0, nrow = 1, ncol = 3)
+
+## Sample Baseline Age and Charlson Values
+sage0 <- sample(dat0$Age_dx_0, size = M, replace = TRUE)
+scharlson0 <- as.integer(sample(dat0$Charlson, M, replace = TRUE))
+
+## Estimate Hospitalizations, t = 1
+for (i in 1:length(alpha.hat1))
+{
+  tmp1[i,] <- as.numeric(1 - pnorm(alpha.hat1[i] + sigma1.hat1*sage0 + sigma2.hat1*scharlson0 + sigma3.hat1*stxrt1 + sigma4.hat1*stxct1, mean = 0, sd = 1))
+}
+tmp1 <- rbind(0, tmp1)
+shosp1 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp1[,i]
+  shosp1[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat0$Hosp)), fhat = F.hat1)
+}
+
+## Estimate Cost, t = 1
+for (i in 1:length(alpha.hat2))
+{
+  tmp2[i,] <- as.numeric(1 - pnorm(alpha.hat2[i] + beta1.hat2*sage0 + beta2.hat2*scharlson0 + beta3.hat2*stxrt1 + beta4.hat2*stxct1 + beta5.hat2*shosp1, mean = 0, sd = 1))
+}
+tmp2 <- rbind(0, tmp2)
+scost1 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp2[,i]
+  scost1[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat2$log_cost)), fhat = F.hat1)
+}
+
+Y1.g <- rbinom(M, 1, p = expit(beta1.hat1 + beta2.hat1*sage0 + beta3.hat1*scharlson0 + beta4.hat1*stxrt1 + beta5.hat1*stxct1 + beta6.hat1*shosp1))
+
+scost1[Y1.g == 1] <- 0
+
+scost1_8 <- exp(scost1)
+
+outcome_8[1, 1] <- mean(scost1_8)
+
+sd_8[1, 1] <- sd(scost1_8)
+
+## Estimate Charlson, t = 1
+for (i in 1:length(alpha.hat3))
+{
+  tmp3[i,] <- as.numeric(1 - pnorm(alpha.hat3[i] + delta1.hat1*sage0 + delta2.hat1*scharlson0 + delta4.hat1*stxrt1 + delta6.hat1*stxct1 + delta8.hat1*shosp1 + delta10.hat1*scost1, mean = 0, sd = 1))
+}
+tmp3 <- rbind(0, tmp3)
+schar1 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp3[,i]
+  schar1[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Charlson)), fhat = F.hat1)
+}
+
+## Estimate Hospitalizations, t = 2
+for (i in 1:length(alpha.hat4))
+{
+  tmp4[i,] <- as.numeric(1 - pnorm(alpha.hat4[i] + sigma1.hat2*sage0 + sigma2.hat2*scharlson0 + sigma3.hat2*schar1 + sigma4.hat2*stxrt1 + sigma5.hat2*stxrt2 + sigma6.hat2*stxct1 + sigma7.hat2*stxct2 + sigma8.hat2*shosp1 + sigma10.hat2*scost1, mean = 0, sd = 1))
+}
+tmp4 <- rbind(0, tmp4)
+shosp2 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp4[,i]
+  shosp2[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Hosp)), fhat = F.hat1)
+}
+
+## Estimate Cost, t = 2
+for (i in 1:length(alpha.hat5))
+{
+  tmp5[i,] <- as.numeric(1 - pnorm(alpha.hat5[i] + beta1.hat4*sage0 + beta2.hat4*scharlson0 + beta3.hat4*schar1 + beta4.hat4*stxrt1 + beta5.hat4*stxrt2 + beta6.hat4*stxct1 + beta7.hat4*stxct2 + beta8.hat4*shosp1 + beta9.hat4*shosp2 + beta10.hat4*scost1, mean = 0, sd = 1))
+}
+tmp5 <- rbind(0, tmp5)
+scost2 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp5[,i]
+  scost2[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat22$log_cost)), fhat = F.hat1)
+}
+
+Y2.g <- rbinom(M, 1, p = expit(beta1.hat3 + beta2.hat3*sage0 + beta3.hat3*scharlson0 + beta4.hat3*schar1 + beta5.hat3*stxrt1 + beta6.hat3*stxrt2 + beta7.hat3*stxct1 + beta8.hat3*stxct2 + beta9.hat3*shosp1 + beta10.hat3*shosp2 + beta11.hat3*scost1))
+
+scost2[Y2.g == 1] <- 0
+
+scost2_8 <- exp(scost2)
+
+outcome_8[1, 2] <- mean(scost2_8)
+
+sd_8[1, 2] <- sd(scost2_8)
+
+## Estimate Charlson, t = 2
+for (i in 1:length(alpha.hat3))
+{
+  tmp6[i,] <- as.numeric(1 - pnorm(alpha.hat3[i] + delta1.hat1*sage0 + delta2.hat1*scharlson0 + delta3.hat1*schar1 + delta4.hat1*stxrt1 + delta5.hat1*stxrt2 + delta6.hat1*stxct1 + delta7.hat1*stxct2 + delta8.hat1*shosp1 + delta9.hat1*shosp2 + delta10.hat1*scost1 + delta11.hat1*scost2, mean = 0, sd = 1))
+}
+tmp6 <- rbind(0, tmp6)
+schar2 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp6[,i]
+  schar2[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Charlson)), fhat = F.hat1)
+}
+
+## Estimate Hospitalizations, t = 3
+for (i in 1:length(alpha.hat4))
+{
+  tmp7[i,] <- as.numeric(1 - pnorm(alpha.hat4[i] + sigma1.hat2*sage0 + sigma2.hat2*schar1 + sigma3.hat2*schar2 + sigma4.hat2*stxrt2 + sigma5.hat2*stxrt3 + sigma6.hat2*stxct2 + sigma7.hat2*stxct3 + sigma8.hat2*shosp1 + sigma9.hat2*shosp2 + sigma10.hat2*scost1 + sigma11.hat2*scost2, mean = 0, sd = 1))
+}
+tmp7 <- rbind(0, tmp7)
+shosp3 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp7[,i]
+  shosp3[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat02$Hosp)), fhat = F.hat1)
+}
+
+## Estimate Cost, t = 3
+for (i in 1:length(alpha.hat5))
+{
+  tmp8[i,] <- as.numeric(1 - pnorm(alpha.hat5[i] + beta1.hat4*sage0 + beta2.hat4*schar1 + beta3.hat4*schar1 + beta4.hat4*stxrt2 + beta5.hat4*stxrt3 + beta6.hat4*stxct2 + beta7.hat4*stxct3 + beta8.hat4*shosp2 + beta9.hat4*shosp3 + beta10.hat4*scost1 + beta11.hat4*scost2, mean = 0, sd = 1))
+}
+tmp8 <- rbind(0, tmp8)
+scost3 <- rep(0, M)
+for (i in 1:M)
+{
+  F.hat1 <- tmp8[,i]
+  scost3[i] <- pull.one(x = runif(1, 0, 1), y = sort(unique(dat22$log_cost)), fhat = F.hat1)
+}
+
+Y3.g <- rbinom(M, 1, p = expit(beta1.hat3 + beta2.hat3*sage0 + beta3.hat3*schar1 + beta4.hat3*schar2 + beta5.hat3*stxrt2 + beta6.hat3*stxrt3 + beta7.hat3*stxct2 + beta8.hat3*stxct3 + beta9.hat3*shosp2 + beta10.hat3*shosp3 + beta11.hat3*scost1 + beta12.hat3*scost2))
+
+scost3[Y3.g == 1] <- 0
+
+scost3_8 <- exp(scost3)
+
+outcome_8[1, 3] <- mean(scost3_8)
+
+sd_8[1, 3] <- sd(scost3_8)
+
+outcome_1 <- as.vector(outcome_1)
+outcome_2 <- as.vector(outcome_2)
+outcome_3 <- as.vector(outcome_3)
+outcome_4 <- as.vector(outcome_4)
+outcome_5 <- as.vector(outcome_5)
+outcome_6 <- as.vector(outcome_6)
+outcome_7 <- as.vector(outcome_7)
+outcome_8 <- as.vector(outcome_8)
+
+sd_1 <- as.vector(sd_1)
+sd_2 <- as.vector(sd_2)
+sd_3 <- as.vector(sd_3)
+sd_4 <- as.vector(sd_4)
+sd_5 <- as.vector(sd_5)
+sd_6 <- as.vector(sd_6)
+sd_7 <- as.vector(sd_7)
+sd_8 <- as.vector(sd_8)
+
+outcome_1 <- cbind(outcome_1[[1]], sd_1[[1]], outcome_1[[2]], sd_1[[2]], outcome_1[[3]], sd_1[[3]], sum(outcome_1[[1]], outcome_1[[2]], outcome_1[[3]]), sum(sd_1[[1]], sd_1[[2]], sd_1[[3]]))
+outcome_2 <- cbind(outcome_2[[1]], sd_2[[1]], outcome_2[[2]], sd_2[[2]], outcome_2[[3]], sd_2[[3]], sum(outcome_2[[1]], outcome_2[[2]], outcome_2[[3]]), sum(sd_2[[1]], sd_2[[2]], sd_2[[3]]))
+outcome_3 <- cbind(outcome_3[[1]], sd_3[[1]], outcome_3[[2]], sd_3[[2]], outcome_3[[3]], sd_3[[3]], sum(outcome_3[[1]], outcome_3[[2]], outcome_3[[3]]), sum(sd_3[[1]], sd_3[[2]], sd_3[[3]]))
+outcome_4 <- cbind(outcome_4[[1]], sd_4[[1]], outcome_4[[2]], sd_4[[2]], outcome_4[[3]], sd_4[[3]], sum(outcome_4[[1]], outcome_4[[2]], outcome_4[[3]]), sum(sd_4[[1]], sd_4[[2]], sd_4[[3]]))
+outcome_5 <- cbind(outcome_5[[1]], sd_5[[1]], outcome_5[[2]], sd_5[[2]], outcome_5[[3]], sd_5[[3]], sum(outcome_5[[1]], outcome_5[[2]], outcome_5[[3]]), sum(sd_5[[1]], sd_5[[2]], sd_5[[3]]))
+outcome_6 <- cbind(outcome_6[[1]], sd_6[[1]], outcome_6[[2]], sd_6[[2]], outcome_6[[3]], sd_6[[3]], sum(outcome_6[[1]], outcome_6[[2]], outcome_6[[3]]), sum(sd_6[[1]], sd_6[[2]], sd_6[[3]]))
+outcome_7 <- cbind(outcome_7[[1]], sd_7[[1]], outcome_7[[2]], sd_7[[2]], outcome_7[[3]], sd_7[[3]], sum(outcome_7[[1]], outcome_7[[2]], outcome_7[[3]]), sum(sd_7[[1]], sd_7[[2]], sd_7[[3]]))
+outcome_8 <- cbind(outcome_8[[1]], sd_8[[1]], outcome_8[[2]], sd_8[[2]], outcome_8[[3]], sd_8[[3]], sum(outcome_8[[1]], outcome_8[[2]], outcome_8[[3]]), sum(sd_8[[1]], sd_8[[2]], sd_8[[3]]))
+
+outcome_est <- as.data.frame(rbind(outcome_1, outcome_2, outcome_3, outcome_4, outcome_5, outcome_6, outcome_7, outcome_8))
+
+rownames(outcome_est) <- c("Stage 1A, Treat 1", "Stage 1A, Treat 2", "Stage 1A, Treat 3", "Stage 1A, Treat 4", "Stage 1B, Treat 1", "Stage 1B, Treat 2", "Stage 1B, Treat 3", "Stage 1B, Treat 4")
+colnames(outcome_est) <- c("t = 1", "SD1", "t = 2", "SD2", "t = 3", "SD3", "Total Cost", "SD Total")
+
+outcome_est
+
+end <- Sys.time()
+end - begin
+```
+
+```{r}
+setwd("~/Documents/CPM Research/Thesis")
+
+all_cost <- as.data.frame(cbind(log(scost1_1), log(scost2_1), log(scost3_1), log(scost1_2), log(scost2_2), log(scost3_2), log(scost1_3), log(scost2_3), log(scost3_3), log(scost1_4), log(scost2_4), log(scost3_4), log(scost1_5), log(scost2_5), log(scost3_5), log(scost1_6), log(scost2_6), log(scost3_6), log(scost1_7), log(scost2_7), log(scost3_7), log(scost1_8), log(scost2_8), log(scost3_8))) 
+all_cost
+
+names(all_cost) <- c("Cost1-Treat1", "Cost2-Treat1", "Cost3-Treat1", "Cost1-Treat2", "Cost2-Treat2", "Cost3-Treat2", "Cost1-Treat3", "Cost2-Treat3", "Cost3-Treat3", "Cost1-Treat4", "Cost2-Treat4", "Cost3-Treat4", "Cost1-Treat5", "Cost2-Treat5", "Cost3-Treat5", "Cost1-Treat6", "Cost2-Treat6", "Cost3-Treat6", "Cost1-Treat7", "Cost2-Treat7", "Cost3-Treat7", "Cost1-Treat8", "Cost2-Treat8", "Cost3-Treat8")
+row.names(all_cost) <- NULL
+
+filename1 <- paste("all_cost-", ".csv")
+
+write.csv(all_cost, filename1)
+```

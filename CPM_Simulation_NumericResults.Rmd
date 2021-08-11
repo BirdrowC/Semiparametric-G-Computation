@@ -1,0 +1,676 @@
+---
+title: "CPM_Eval_Results_2.21"
+author: "Caroline Birdrow"
+date: "2/24/2021"
+output: html_document
+---
+
+## Treatment Scheme One
+```{r}
+##G-computation with a CPM vs. a Parametric Model 
+library(rms)
+
+## Set seed
+set.seed(100)
+
+## Define useful functions
+expit <- function(x) {exp(x)/(1 + exp(x))}
+
+pull.one <- function(x, y, fhat)
+{
+  return(y[max(which(fhat < x))])
+}
+
+## Simulation parameters
+alpha0 <- -0.3
+alpha1 <- 0.7
+alpha2 <- 0.5
+alpha3 <- 0.7
+
+sigma0 <- -0.6
+sigma1 <- 0.25
+sigma2 <- 0.2
+
+beta0 <- -2.5
+beta1 <- 0.2
+beta2 <- 0.1
+beta3 <- 0.4
+beta4 <- 0.3
+beta5 <- 0.6
+beta6 <- 0.5
+sigmaY <- 0.3
+
+s <- 1
+s.d <- 0.3
+
+c <- 1
+d <- 1
+
+if(c == 1){
+  A1 = 0
+  A2 = 0
+  A3 = 0
+  sa1 = 0
+  sa2 = 0
+  sa3 = 0
+}
+
+if(c == 2){
+  A1 = 0
+  A2 = 1
+  A3 = 1
+  sa1 = 0
+  sa2 = 1
+  sa3 = 1
+}
+
+if(c == 3){
+  A1 = 0
+  A2 = 0
+  A3 = 1
+  sa1 = 0
+  sa2 = 0
+  sa3 = 1
+}
+
+if(c == 4){
+  A1 = 1
+  A2 = 1
+  A3 = 1
+  sa1 = 1
+  sa2 = 1
+  sa3 = 1
+}
+
+### True outcomes 
+## Time Point 1
+N_true <- 1e6
+L1 <- rnorm(N_true, mean = 0, sd = s)
+
+## Time Point 2
+eps.l2 <- rnorm(N_true, mean = 0, sd = s.d)
+L2 <- sigma0 + sigma1 * L1 + sigma2 * A1 + eps.l2
+L2[L2 < -1] <- 0
+
+if(d == 1){
+L2[L2 > -1] <- exp(L2[L2 > -1])
+}
+
+if(d == 2){
+L2[L2 > -1] <- (L2[L2 > -1])^2
+}
+
+if(d == 3){
+L2[L2 > -1] <- abs(L2[L2 > -1])
+}
+
+## Time Point 3
+eps.l3 <- rnorm(N_true, mean = 0, sd = s.d)
+L3 <- sigma0 + sigma1 * L2 + sigma2 * A2 + eps.l3
+L3[L3 < -1] <- 0
+
+if(d == 1){
+  L3[L3 > -1] <- exp(L3[L3 > -1])
+}
+
+if(d == 2){
+  L3[L3 > -1] <- (L3[L3 > -1])^ 2
+}
+
+if(d == 3){
+  L3[L3 > -1] <- abs(L3[L3 > -1])
+}
+
+## Final Outcome 
+eps.Y <- rnorm(N_true, mean = 0, sd = s)
+Ystar <- beta0 + beta1*L1 + beta2*A1 + beta3*L2 + beta4*A2 + beta5*L3 + beta6*A3 + eps.Y
+Y_true <- Ystar
+Y_true[Ystar < -3] <- 0
+
+if(d == 1){
+Y_true[Ystar > -3] <- exp(Ystar[Ystar > -3])
+}
+
+if(d == 2){
+Y_true[Ystar > -3] <- (Ystar[Ystar > -3])^2
+}
+
+if(d == 3){
+Y_true[Ystar > -3] <- abs(Ystar[Ystar > -3])
+}
+
+my0_true_c1 <- mean(Y_true)
+```
+
+```{r, warning= FALSE}
+ITER <- 200
+nsim <- 5
+N <- (ITER*nsim) + 1
+### SUMMARIZE SIMULATIONS
+setwd("~/Documents/CPM Research/Thesis/SimResultsAug7/Treat1")
+
+#Average Outcome Estimates 
+outcome.estimates.overall <- 0
+for (j in 1:ITER)
+{
+  outcome.estimates <- read.csv(paste("outcome.estimates-", j, ".csv"))
+  outcome.estimates.overall <- rbind(outcome.estimates.overall, outcome.estimates)
+}
+
+outcome.estimates.overall <- outcome.estimates.overall[2:N, 2]
+outcome.estimates_c1 <- mean(outcome.estimates.overall)
+sd_c1 <- sd(outcome.estimates.overall)
+
+bias_c1 <- outcome.estimates_c1 - my0_true_c1
+
+print(paste("Estimated Outcome", outcome.estimates_c1)) 
+print(paste("True Outcome", my0_true_c1)) 
+print(paste("Standard Deviation", sd_c1))
+print(paste("Bias", bias_c1))
+
+c1 <- cbind(my0_true_c1, outcome.estimates_c1, sd_c1, bias_c1)
+```
+
+## Treatment Scheme Two
+```{r}
+##G-computation with a CPM vs. a Parametric Model 
+library(rms)
+
+## Set seed
+set.seed(100)
+
+## Define useful functions
+expit <- function(x) {exp(x)/(1 + exp(x))}
+
+pull.one <- function(x, y, fhat)
+{
+  return(y[max(which(fhat < x))])
+}
+
+## Simulation parameters
+alpha0 <- -0.3
+alpha1 <- 0.7
+alpha2 <- 0.5
+alpha3 <- 0.7
+
+sigma0 <- -0.6
+sigma1 <- 0.25
+sigma2 <- 0.2
+
+beta0 <- -2.5
+beta1 <- 0.2
+beta2 <- 0.1
+beta3 <- 0.4
+beta4 <- 0.3
+beta5 <- 0.6
+beta6 <- 0.5
+sigmaY <- 0.3
+
+s <- 1
+s.d <- 0.3
+
+c <- 2
+d <- 1
+
+if(c == 1){
+  A1 = 0
+  A2 = 0
+  A3 = 0
+  sa1 = 0
+  sa2 = 0
+  sa3 = 0
+}
+
+if(c == 2){
+  A1 = 0
+  A2 = 1
+  A3 = 1
+  sa1 = 0
+  sa2 = 1
+  sa3 = 1
+}
+
+if(c == 3){
+  A1 = 0
+  A2 = 0
+  A3 = 1
+  sa1 = 0
+  sa2 = 0
+  sa3 = 1
+}
+
+if(c == 4){
+  A1 = 1
+  A2 = 1
+  A3 = 1
+  sa1 = 1
+  sa2 = 1
+  sa3 = 1
+}
+
+### True outcomes 
+## Time Point 1
+N_true <- 1e6
+L1 <- rnorm(N_true, mean = 0, sd = s)
+
+## Time Point 2
+eps.l2 <- rnorm(N_true, mean = 0, sd = s.d)
+L2 <- sigma0 + sigma1 * L1 + sigma2 * A1 + eps.l2
+L2[L2 < -1] <- 0
+
+if(d == 1){
+L2[L2 > -1] <- exp(L2[L2 > -1])
+}
+
+if(d == 2){
+L2[L2 > -1] <- (L2[L2 > -1])^2
+}
+
+if(d == 3){
+L2[L2 > -1] <- abs(L2[L2 > -1])
+}
+
+## Time Point 3
+eps.l3 <- rnorm(N_true, mean = 0, sd = s.d)
+L3 <- sigma0 + sigma1 * L2 + sigma2 * A2 + eps.l3
+L3[L3 < -1] <- 0
+
+if(d == 1){
+  L3[L3 > -1] <- exp(L3[L3 > -1])
+}
+
+if(d == 2){
+  L3[L3 > -1] <- (L3[L3 > -1])^ 2
+}
+
+if(d == 3){
+  L3[L3 > -1] <- abs(L3[L3 > -1])
+}
+
+## Final Outcome 
+eps.Y <- rnorm(N_true, mean = 0, sd = s)
+Ystar <- beta0 + beta1*L1 + beta2*A1 + beta3*L2 + beta4*A2 + beta5*L3 + beta6*A3 + eps.Y
+Y_true <- Ystar
+Y_true[Ystar < -3] <- 0
+
+if(d == 1){
+Y_true[Ystar > -3] <- exp(Ystar[Ystar > -3])
+}
+
+if(d == 2){
+Y_true[Ystar > -3] <- (Ystar[Ystar > -3])^2
+}
+
+if(d == 3){
+Y_true[Ystar > -3] <- abs(Ystar[Ystar > -3])
+}
+
+my0_true_c2 <- mean(Y_true)
+```
+
+```{r, warning= FALSE}
+ITER <- 200
+nsim <- 5
+N <- (ITER*nsim) + 1
+### SUMMARIZE SIMULATIONS
+setwd("~/Documents/CPM Research/Thesis/SimResultsAug7/Treat2")
+
+#Average Outcome Estimates 
+outcome.estimates.overall <- 0
+for (j in 1:ITER)
+{
+  outcome.estimates <- read.csv(paste("outcome.estimates-", j, ".csv"))
+  outcome.estimates.overall <- rbind(outcome.estimates.overall, outcome.estimates)
+}
+
+outcome.estimates.overall <- outcome.estimates.overall[2:N, 2]
+outcome.estimates_c2 <- mean(outcome.estimates.overall)
+sd_c2 <- sd(outcome.estimates.overall)
+
+bias_c2 <- outcome.estimates_c2 - my0_true_c2
+
+print(paste("Estimated Outcome", outcome.estimates_c2)) 
+print(paste("True Outcome", my0_true_c2)) 
+print(paste("Standard Deviation", sd_c2)) 
+print(paste("Bias", bias_c2)) 
+
+c2 <- cbind(my0_true_c2, outcome.estimates_c2, sd_c2, bias_c2)
+```
+
+## Treatment Scheme Three
+```{r}
+##G-computation with a CPM vs. a Parametric Model 
+library(rms)
+
+## Set seed
+set.seed(100)
+
+## Define useful functions
+expit <- function(x) {exp(x)/(1 + exp(x))}
+
+pull.one <- function(x, y, fhat)
+{
+  return(y[max(which(fhat < x))])
+}
+
+## Simulation parameters
+alpha0 <- -0.3
+alpha1 <- 0.7
+alpha2 <- 0.5
+alpha3 <- 0.7
+
+sigma0 <- -0.6
+sigma1 <- 0.25
+sigma2 <- 0.2
+
+beta0 <- -2.5
+beta1 <- 0.2
+beta2 <- 0.1
+beta3 <- 0.4
+beta4 <- 0.3
+beta5 <- 0.6
+beta6 <- 0.5
+sigmaY <- 0.3
+
+s <- 1
+s.d <- 0.3
+
+c <- 3
+d <- 1
+
+if(c == 1){
+  A1 = 0
+  A2 = 0
+  A3 = 0
+  sa1 = 0
+  sa2 = 0
+  sa3 = 0
+}
+
+if(c == 2){
+  A1 = 0
+  A2 = 1
+  A3 = 1
+  sa1 = 0
+  sa2 = 1
+  sa3 = 1
+}
+
+if(c == 3){
+  A1 = 0
+  A2 = 0
+  A3 = 1
+  sa1 = 0
+  sa2 = 0
+  sa3 = 1
+}
+
+if(c == 4){
+  A1 = 1
+  A2 = 1
+  A3 = 1
+  sa1 = 1
+  sa2 = 1
+  sa3 = 1
+}
+
+### True outcomes 
+## Time Point 1
+N_true <- 1e6
+L1 <- rnorm(N_true, mean = 0, sd = s)
+
+## Time Point 2
+eps.l2 <- rnorm(N_true, mean = 0, sd = s.d)
+L2 <- sigma0 + sigma1 * L1 + sigma2 * A1 + eps.l2
+L2[L2 < -1] <- 0
+
+if(d == 1){
+L2[L2 > -1] <- exp(L2[L2 > -1])
+}
+
+if(d == 2){
+L2[L2 > -1] <- (L2[L2 > -1])^2
+}
+
+if(d == 3){
+L2[L2 > -1] <- abs(L2[L2 > -1])
+}
+
+## Time Point 3
+eps.l3 <- rnorm(N_true, mean = 0, sd = s.d)
+L3 <- sigma0 + sigma1 * L2 + sigma2 * A2 + eps.l3
+L3[L3 < -1] <- 0
+
+if(d == 1){
+  L3[L3 > -1] <- exp(L3[L3 > -1])
+}
+
+if(d == 2){
+  L3[L3 > -1] <- (L3[L3 > -1])^ 2
+}
+
+if(d == 3){
+  L3[L3 > -1] <- abs(L3[L3 > -1])
+}
+
+## Final Outcome 
+eps.Y <- rnorm(N_true, mean = 0, sd = s)
+Ystar <- beta0 + beta1*L1 + beta2*A1 + beta3*L2 + beta4*A2 + beta5*L3 + beta6*A3 + eps.Y
+Y_true <- Ystar
+Y_true[Ystar < -3] <- 0
+
+if(d == 1){
+Y_true[Ystar > -3] <- exp(Ystar[Ystar > -3])
+}
+
+if(d == 2){
+Y_true[Ystar > -3] <- (Ystar[Ystar > -3])^2
+}
+
+if(d == 3){
+Y_true[Ystar > -3] <- abs(Ystar[Ystar > -3])
+}
+
+my0_true_c3 <- mean(Y_true)
+```
+
+```{r, warning= FALSE}
+ITER <- 200
+nsim <- 5
+N <- (ITER*nsim) + 1
+### SUMMARIZE SIMULATIONS
+setwd("~/Documents/CPM Research/Thesis/SimResultsAug7/Treat3")
+
+#Average Outcome Estimates 
+outcome.estimates.overall <- 0
+for (j in 1:ITER)
+{
+  outcome.estimates <- read.csv(paste("outcome.estimates-", j, ".csv"))
+  outcome.estimates.overall <- rbind(outcome.estimates.overall, outcome.estimates)
+}
+
+outcome.estimates.overall <- outcome.estimates.overall[2:N, 2]
+outcome.estimates_c3 <- mean(outcome.estimates.overall)
+sd_c3 <- sd(outcome.estimates.overall)
+
+bias_c3 <- outcome.estimates_c3 - my0_true_c3
+
+print(paste("Estimated Outcome", outcome.estimates_c3)) 
+print(paste("True Outcome", my0_true_c3)) 
+print(paste("Standard Deviation", sd_c3)) 
+print(paste("Bias", bias_c3)) 
+
+c3 <- cbind(my0_true_c3, outcome.estimates_c3, sd_c3, bias_c3)
+```
+
+## Treatment Scheme Four
+```{r}
+##G-computation with a CPM vs. a Parametric Model 
+library(rms)
+
+## Set seed
+set.seed(100)
+
+## Define useful functions
+expit <- function(x) {exp(x)/(1 + exp(x))}
+
+pull.one <- function(x, y, fhat)
+{
+  return(y[max(which(fhat < x))])
+}
+
+## Simulation parameters
+alpha0 <- -0.3
+alpha1 <- 0.7
+alpha2 <- 0.5
+alpha3 <- 0.7
+
+sigma0 <- -0.6
+sigma1 <- 0.25
+sigma2 <- 0.2
+
+beta0 <- -2.5
+beta1 <- 0.2
+beta2 <- 0.1
+beta3 <- 0.4
+beta4 <- 0.3
+beta5 <- 0.6
+beta6 <- 0.5
+sigmaY <- 0.3
+
+s <- 1
+s.d <- 0.3
+
+c <- 4
+d <- 1
+
+if(c == 1){
+  A1 = 0
+  A2 = 0
+  A3 = 0
+  sa1 = 0
+  sa2 = 0
+  sa3 = 0
+}
+
+if(c == 2){
+  A1 = 0
+  A2 = 1
+  A3 = 1
+  sa1 = 0
+  sa2 = 1
+  sa3 = 1
+}
+
+if(c == 3){
+  A1 = 0
+  A2 = 0
+  A3 = 1
+  sa1 = 0
+  sa2 = 0
+  sa3 = 1
+}
+
+if(c == 4){
+  A1 = 1
+  A2 = 1
+  A3 = 1
+  sa1 = 1
+  sa2 = 1
+  sa3 = 1
+}
+
+### True outcomes 
+## Time Point 1
+N_true <- 1e6
+L1 <- rnorm(N_true, mean = 0, sd = s)
+
+## Time Point 2
+eps.l2 <- rnorm(N_true, mean = 0, sd = s.d)
+L2 <- sigma0 + sigma1 * L1 + sigma2 * A1 + eps.l2
+L2[L2 < -1] <- 0
+
+if(d == 1){
+L2[L2 > -1] <- exp(L2[L2 > -1])
+}
+
+if(d == 2){
+L2[L2 > -1] <- (L2[L2 > -1])^2
+}
+
+if(d == 3){
+L2[L2 > -1] <- abs(L2[L2 > -1])
+}
+
+## Time Point 3
+eps.l3 <- rnorm(N_true, mean = 0, sd = s.d)
+L3 <- sigma0 + sigma1 * L2 + sigma2 * A2 + eps.l3
+L3[L3 < -1] <- 0
+
+if(d == 1){
+  L3[L3 > -1] <- exp(L3[L3 > -1])
+}
+
+if(d == 2){
+  L3[L3 > -1] <- (L3[L3 > -1])^ 2
+}
+
+if(d == 3){
+  L3[L3 > -1] <- abs(L3[L3 > -1])
+}
+
+## Final Outcome 
+eps.Y <- rnorm(N_true, mean = 0, sd = s)
+Ystar <- beta0 + beta1*L1 + beta2*A1 + beta3*L2 + beta4*A2 + beta5*L3 + beta6*A3 + eps.Y
+Y_true <- Ystar
+Y_true[Ystar < -3] <- 0
+
+if(d == 1){
+Y_true[Ystar > -3] <- exp(Ystar[Ystar > -3])
+}
+
+if(d == 2){
+Y_true[Ystar > -3] <- (Ystar[Ystar > -3])^2
+}
+
+if(d == 3){
+Y_true[Ystar > -3] <- abs(Ystar[Ystar > -3])
+}
+
+my0_true_c4 <- mean(Y_true)
+```
+
+```{r, warning= FALSE}
+ITER <- 200
+nsim <- 5
+N <- (ITER*nsim) + 1
+### SUMMARIZE SIMULATIONS
+setwd("~/Documents/CPM Research/Thesis/SimResultsAug7/Treat4")
+
+#Average Outcome Estimates 
+outcome.estimates.overall <- 0
+for (j in 1:ITER)
+{
+  outcome.estimates <- read.csv(paste("outcome.estimates-", j, ".csv"))
+  outcome.estimates.overall <- rbind(outcome.estimates.overall, outcome.estimates)
+}
+
+outcome.estimates.overall <- outcome.estimates.overall[2:N, 2]
+outcome.estimates_c4 <- mean(outcome.estimates.overall)
+sd_c4 <- sd(outcome.estimates.overall)
+
+bias_c4 <- outcome.estimates_c4 - my0_true_c4
+
+print(paste("Estimated Outcome", outcome.estimates_c4)) 
+print(paste("True Outcome", my0_true_c4)) 
+print(paste("Standard Deviation", sd_c4)) 
+print(paste("Bias", bias_c4)) 
+
+c4 <- cbind(my0_true_c4, outcome.estimates_c4, sd_c4, bias_c4)
+```
+
+```{r}
+data <- as.data.frame(rbind(c1, c2, c3, c4))
+colnames(data) <- c("True Outcome", "Outcome Estimate", "Standard Deviation", "Bias")
+data
+```
